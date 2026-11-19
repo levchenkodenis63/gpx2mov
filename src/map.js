@@ -1,0 +1,500 @@
+(() => {
+  'use strict';
+  const TILE = 256;
+  const RAD = Math.PI / 180;
+  const ORANGE = '#ee642c';
+
+  function layer(width, height) {
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    return canvas;
+  }
+
+  function kilometres(a, b) {
+    const lat = Math.sin((b.lat - a.lat) * RAD / 2);
+    const lon = Math.sin((b.lon - a.lon) * RAD / 2);
+    const h = lat * lat + Math.cos(a.lat * RAD) * Math.cos(b.lat * RAD) * lon * lon;
+    return 12742 * Math.asin(Math.sqrt(Math.min(1, h)));
+  }
+
+  // Keep the projection continuous across the antimeridian.
+  function project(point, near) {
+    let x = (point.lon + 180) / 360;
+    if (near !== undefined) x += Math.round(near - x);
+    const lat = Math.max(-85.05112878, Math.min(85.05112878, point.lat)) * RAD;
+    return { x, y: (1 - Math.asinh(Math.tan(lat)) / Math.PI) / 2 };
+  }
+
+  const tileCache = new Map();
+
+  function loadTile(z, x, y, satellite) {
+    const key = satellite
+      ? `https://tiles.maps.eox.at/wmts/1.0.0/s2cloudless-2025_3857/default/g/${z}/${y}/${x}.jpg`
+      : `https://tile.openstreetmap.org/${z}/${x}/${y}.png`;
+    if (tileCache.has(key)) return tileCache.get(key);
+    const pending = new Promise(resolve => {
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      const timer = setTimeout(() => {
+        img.onload = img.onerror = null;
+        img.removeAttribute('src');
+        resolve(null);
+      }, satellite ? 15000 : 5500);
+      img.onload = img.onerror = () => {
+        clearTimeout(timer);
+        resolve(img.naturalWidth ? img : null);
+      };
+      img.src = key;
+    });
+    tileCache.set(key, pending);
+    if (tileCache.size > 180) tileCache.delete(tileCache.keys().next().value);
+    pending.then(img => {
+      if (!img && tileCache.get(key) === pending) tileCache.delete(key);
+    });
+    return pending;
+  }
+
+  function drawComo(ctx, width, height, left, top, scale, unit) {
+    const pixel = ([lon, lat]) => {
+      const p = project({ lat, lon });
+      return [(p.x - left) * scale, (p.y - top) * scale];
+    };
+    ctx.fillStyle = '#e5e9db';
+    ctx.fillRect(0, 0, width, height);
+
+    // Stylised contours for the illustrated demo map.
+    const relief = (x,y) => Math.sin(11*x+7*y+Math.sin(9*y))*.7
+      + Math.cos(15*y-5*x)*.45 + Math.sin(21*x-13*y)*.17
+      + Math.cos(37*x+8*y)*.075 + Math.sin(48*y-24*x)*.034;
+    const cell = Math.max(7, Math.round(9 * unit));
+    const cols = Math.ceil(width / cell) + 1;
+    const rows = Math.ceil(height / cell) + 1;
+    const data = new Float32Array(cols * rows);
+    for (let j = 0; j < rows; j++) for (let i = 0; i < cols; i++) {
+      data[j*cols+i] = relief(i*cell/height,j*cell/height);
+    }
+    for (let level = -1.5; level <= 1.5; level += .076) {
+      ctx.beginPath();
+      for (let j = 0; j < rows - 1; j++) for (let i = 0; i < cols - 1; i++) {
+        const k = j * cols + i;
+        const v = [data[k],data[k+1],data[k+cols+1],data[k+cols]];
+        if (Math.min(...v) >= level || Math.max(...v) < level) continue;
+        const dx = [0,1,1,0], dy = [0,0,1,1];
+        let pen = false;
+        for (let e=0;e<4;e++) {
+          const next=(e+1)%4;
+          if ((v[e] < level) === (v[next] < level)) continue;
+          const fraction = (level - v[e]) / (v[next]-v[e]);
+          const x=(i+dx[e]+fraction*(dx[next]-dx[e]))*cell;
+          const y=(j+dy[e]+fraction*(dy[next]-dy[e]))*cell;
+          if (pen) ctx.lineTo(x,y); else ctx.moveTo(x,y);
+          pen=!pen;
+        }
+      }
+      ctx.strokeStyle='rgba(132,151,115,.35)'; ctx.lineWidth=.88*unit; ctx.stroke();
+    }
+    const shore = [[9.077,45.814],[9.062,45.829],[9.077,45.846],[9.086,45.862],[9.103,45.879],[9.120,45.892],[9.121,45.914],[9.113,45.938],[9.126,45.946],[9.149,45.954],[9.178,45.969],[9.192,45.976],[9.197,45.990],[9.219,45.991],[9.233,46.002],[9.229,46.019],[9.235,46.034],[9.260,46.058],[9.265,46.083],[9.260,46.108],[9.288,46.156],[9.351,46.173],[9.412,46.177],[9.371,46.146],[9.332,46.122],[9.312,46.091],[9.308,46.068],[9.310,46.047],[9.285,46.021],[9.286,45.994],[9.308,45.964],[9.337,45.926],[9.349,45.902],[9.343,45.870],[9.363,45.851],[9.404,45.836],[9.387,45.858],[9.364,45.882],[9.354,45.924],[9.329,45.960],[9.302,45.991],[9.284,45.976],[9.266,45.989],[9.259,45.982],[9.244,45.963],[9.219,45.949],[9.184,45.944],[9.152,45.936],[9.133,45.924],[9.135,45.909],[9.146,45.890],[9.158,45.880],[9.137,45.866],[9.122,45.858],[9.112,45.843],[9.100,45.838],[9.096,45.819],[9.083,45.810]];
+    const path = new Path2D();
+    shore.forEach((p,i) => { const xy = pixel(p); if(i) path.lineTo(...xy); else path.moveTo(...xy); });
+    path.closePath();
+    ctx.fillStyle='#9fcacf'; ctx.fill(path);
+    ctx.lineWidth=1.4*unit; ctx.strokeStyle='#77a8ad'; ctx.stroke(path);
+    const places = [
+      ['Como',9.077,45.799],['Cernobbio',9.056,45.848],['Torno',9.131,45.854],
+      ['Argegno',9.095,45.940],['Lenno',9.180,45.981],['Bellagio',9.282,45.982],
+      ['Menaggio',9.209,46.019],['Varenna',9.304,46.016],['Nesso',9.167,45.911],
+      ['Erba',9.234,45.809],['Lecco',9.406,45.856],['Canzo',9.269,45.851],
+      ['Porlezza',9.121,46.036],['Lugano',8.953,46.005],['Moltrasio',9.063,45.876]
+    ];
+    ctx.font='500 '+Math.round(14*unit)+'px system-ui,sans-serif';
+    ctx.textAlign='center'; ctx.lineWidth=3*unit; ctx.strokeStyle='#e9ecdf'; ctx.fillStyle='#586456';
+    for (const [name,lon,lat] of places) {
+      const xy=pixel([lon,lat]); ctx.strokeText(name,...xy); ctx.fillText(name,...xy);
+    }
+    ctx.textAlign='left';
+  }
+
+  window.prepareMap = async function prepareMap(segments, width, height, options = {}) {
+    const frameW = width, frameH = height;
+    // Both formats use the landscape camera scale. Keep enough backing map
+    // for the narrower portrait viewport to follow the marker horizontally.
+    const landscapeW = Math.max(frameW, frameH);
+    const landscapeH = Math.min(frameW, frameH);
+    width = landscapeW;
+    if (options.follow) width = height = Math.ceil(Math.hypot(frameW, frameH)) + 4;
+    const base = layer(width, height);
+    const bg = base.getContext('2d');
+    const unit = Math.max(0.6, Math.min(frameW, frameH) / 675);
+    let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+    let near, total = 0;
+    const points = [];
+    for (const segment of segments) {
+      let previous;
+      for (const location of segment) {
+        const p = project(location, near);
+        near = p.x;
+        if (previous) total += kilometres(previous, location);
+        points.push({ ...p, km: total, start: !previous });
+        minX = Math.min(minX, p.x);
+        maxX = Math.max(maxX, p.x);
+        minY = Math.min(minY, p.y);
+        maxY = Math.max(maxY, p.y);
+        previous = location;
+      }
+    }
+    if (!points.length) throw new Error('Трек не содержит координат');
+    const spanX = maxX - minX, spanY = maxY - minY;
+    const fit = options.follow
+      ? Math.min(frameW, frameH) * 0.82 / Math.hypot(spanX, spanY)
+      : Math.min(landscapeW * 0.76 / spanX, landscapeH * 0.69 / spanY);
+    const scale = Math.min(TILE * 2 ** 18, fit);
+    const left = (maxX + minX) / 2 - width / (2 * scale);
+    const top = (maxY + minY) / 2 - height / (2 * scale);
+    for (const p of points) {
+      p.x = (p.x - left) * scale;
+      p.y = (p.y - top) * scale;
+    }
+
+    bg.fillStyle = '#edf0e7';
+    bg.fillRect(0, 0, width, height);
+    // Geographic graticule remains visible wherever a tile is unavailable.
+    const step = 2 ** Math.round(Math.log2(105 * unit / scale));
+    bg.lineWidth = unit;
+    bg.strokeStyle = '#c6d1c4';
+    bg.fillStyle = '#627568';
+    bg.font = Math.round(11 * unit) + 'px monospace';
+    for (let x = Math.ceil(left / step) * step; x < left + width / scale; x += step) {
+      const px = (x - left) * scale;
+      bg.beginPath(); bg.moveTo(px, 0); bg.lineTo(px, height); bg.stroke();
+      const lon = ((x * 360 % 360 + 360) % 360) - 180;
+      bg.fillText(Math.abs(lon).toFixed(3) + '°' + (lon < 0 ? 'W' : 'E'), px + 4 * unit, 16 * unit);
+    }
+    for (let y = Math.ceil(top / step) * step; y < top + height / scale; y += step) {
+      const py = (y - top) * scale;
+      bg.beginPath(); bg.moveTo(0, py); bg.lineTo(width, py); bg.stroke();
+      const lat = Math.atan(Math.sinh(Math.PI * (1 - 2 * y))) / RAD;
+      bg.fillText(Math.abs(lat).toFixed(3) + '°' + (lat < 0 ? 'S' : 'N'), 4 * unit, py - 4 * unit);
+    }
+
+    if (options.comoDemo) drawComo(bg, width, height, left, top, scale, unit);
+
+    const entries = new Map();
+    let visible = [], waiting = [], active = 0, disposed = false, redraw = 0;
+    let settleView = null;
+    const maxLevel = options.satellite ? 14 : 19;
+    // Keep a continuous overview beneath on-demand imagery during network
+    // gaps, including the first pass through a route during real-time export.
+    const overviewLevel=Math.max(0,Math.min(maxLevel,Math.floor(Math.log2(scale/TILE))));
+    const overviewCount=2**overviewLevel, overviewSize=scale/overviewCount;
+    const overviewJobs=[];
+    let overviewLoaded=0;
+    for(let row=Math.max(0,Math.floor(top*overviewCount));row<Math.min(overviewCount,Math.ceil((top+height/scale)*overviewCount));row++){
+      for(let tx=Math.floor(left*overviewCount);tx<Math.ceil((left+width/scale)*overviewCount);tx++){
+        const col=((tx%overviewCount)+overviewCount)%overviewCount;
+        overviewJobs.push(loadTile(overviewLevel,col,row,options.satellite).then(image=>{
+          if(disposed || !image) return;
+          bg.drawImage(image,(tx/overviewCount-left)*scale,(row/overviewCount-top)*scale,overviewSize+.4,overviewSize+.4);
+          overviewLoaded++;
+        }));
+      }
+    }
+    const overviewReady=Promise.all(overviewJobs);
+    function pump() {
+      while (!disposed && active < 8 && waiting.length) {
+        const entry = waiting.shift();
+        if (entry.pending || entry.image || entry.retryAfter > Date.now()) continue;
+        active++;
+        entry.pending = true;
+        loadTile(entry.z,entry.col,entry.row,options.satellite).then(image=>{
+          entry.pending = false;
+          entry.image = image;
+          entry.retryAfter = image ? 0 : Date.now()+20000;
+          active--;
+          if (disposed) return;
+          if (!redraw) redraw=requestAnimationFrame(()=>{
+            redraw=0;
+            options.onTiles?.();
+          });
+          pump();
+        });
+      }
+      if (settleView && !waiting.length && !active) {
+        settleView();
+        settleView=null;
+      }
+    }
+    function waitForTiles(){
+      if (!waiting.length && !active) return overviewReady;
+      return new Promise(resolve=>{
+        const previous=settleView;
+        settleView=()=>{previous?.();resolve(overviewReady);};
+      });
+    }
+    // Intersect tiles with the rotated viewport, using separating axes in
+    // both map space and screen space. Only the current frame drives requests.
+    function drawTiles(ctx,magnification){
+      const level=Math.max(0,Math.min(maxLevel,Math.round(Math.log2(scale*magnification/TILE))));
+      const count=2**level, size=scale/count;
+      const inv=transform.inverse();
+      const corners=[[0,0],[frameW,0],[0,frameH],[frameW,frameH]].map(([x,y])=>
+        new DOMPoint(x,y).matrixTransform(inv));
+      const xs=corners.map(p=>(left+p.x/scale)*count);
+      const ys=corners.map(p=>(top+p.y/scale)*count);
+      const extentX=(Math.abs(transform.a)+Math.abs(transform.c))*size/2;
+      const extentY=(Math.abs(transform.b)+Math.abs(transform.d))*size/2;
+      const queue=new Map(), current=[];
+      let painted=0;
+      for(let row=Math.max(0,Math.floor(Math.min(...ys)));row<Math.min(count,Math.ceil(Math.max(...ys)));row++){
+        for(let tx=Math.floor(Math.min(...xs));tx<Math.ceil(Math.max(...xs));tx++){
+          const x=(tx/count-left)*scale, y=(row/count-top)*scale;
+          const center=new DOMPoint(x+size/2,y+size/2).matrixTransform(transform);
+          if(center.x+extentX<0 || center.x-extentX>frameW || center.y+extentY<0 || center.y-extentY>frameH) continue;
+          const col=((tx%count)+count)%count;
+          const key=level+'/'+col+'/'+row;
+          let entry=entries.get(key);
+          if(!entry){entry={z:level,col,row};entries.set(key,entry);}
+          entry.used=performance.now();
+          current.push(entry);
+          if(!entry.image && !entry.pending && !(entry.retryAfter>Date.now())){
+            entry.priority=Math.hypot(center.x-frameW/2,center.y-frameH/2);
+            queue.set(key,entry);
+          }
+          // Reuse the nearest available parent until this tile arrives.
+          for(let dz=0;dz<=level;dz++){
+            const factor=2**dz;
+            const parent=dz ? entries.get((level-dz)+'/'+Math.floor(col/factor)+'/'+Math.floor(row/factor)) : entry;
+            if(!parent?.image) continue;
+            const part=parent.image.naturalWidth/factor;
+            ctx.drawImage(parent.image,(col%factor)*part,(row%factor)*part,part,part,x,y,size+.35/magnification,size+.35/magnification);
+            painted++;
+            break;
+          }
+        }
+      }
+      visible=current;
+      waiting=[...queue.values()].sort((a,b)=>a.priority-b.priority);
+      if(entries.size>300){
+        const keep=new Set(current);
+        const old=[...entries].filter(([,e])=>!keep.has(e)&&!e.pending).sort((a,b)=>a[1].used-b[1].used);
+        for(const [key] of old.slice(0,entries.size-260)) entries.delete(key);
+      }
+      pump();
+      return painted;
+    }
+    function dispose(){disposed=true;waiting=[];cancelAnimationFrame(redraw);settleView?.();entries.clear();}
+
+    function label(bg, text, right, lift = 0) {
+      bg.font = Math.round(13 * unit) + 'px system-ui,sans-serif';
+      const w = bg.measureText(text).width + 14 * unit;
+      const x = right ? frameW - w : 0;
+      const y = frameH - (22 + lift) * unit;
+      bg.fillStyle = 'rgba(250,252,247,0.90)';
+      bg.fillRect(x, y, w, 22 * unit);
+      bg.fillStyle = '#33483c';
+      bg.fillText(text, x + 7 * unit, y + 16 * unit);
+    }
+    const route = new Path2D();
+    let lastVisible;
+    for (const p of points) {
+      if (p.start) {
+        route.moveTo(p.x, p.y);
+        lastVisible = p;
+      } else if (Math.hypot(p.x - lastVisible.x, p.y - lastVisible.y) > 0.04 * unit) {
+        route.lineTo(p.x, p.y);
+        lastVisible = p;
+      }
+    }
+    // Precompute camera motion in video time. Seeking or a dropped preview
+    // frame must produce the same bearing as the corresponding export frame.
+    const headingRate = 30;
+    const headingCache = new Map();
+    function headingsFor(duration) {
+      if (headingCache.has(duration)) return headingCache.get(duration);
+      const frames = Math.round(duration * headingRate);
+      const raw = [];
+      let cursor = 0;
+      let previousAngle = 0;
+      for (let i = 0; i <= frames; i++) {
+        const km = total * i / frames;
+        while (cursor + 1 < points.length &&
+               (points[cursor + 1].km <= km || points[cursor + 1].start)) cursor++;
+        const a = points[cursor], b = points[cursor + 1];
+        if (b && !b.start && b.km > a.km)
+          previousAngle = Math.atan2(b.x - a.x, a.y - b.y);
+        raw.push({x:Math.sin(previousAngle), y:Math.cos(previousAngle)});
+      }
+
+      // Average directions on the unit circle. At a hairpin the directions
+      // may cancel, so hold the last reliable bearing until the exit is clear.
+      const angles = [];
+      const radius = Math.round(headingRate * 0.9);
+      let angle = Math.atan2(raw[0].x,raw[0].y);
+      let velocity = 0;
+      const maxSpeed = Math.PI / 3; // radians per second
+      for (let i = 0; i <= frames; i++) {
+        let x = 0, y = 0, weightSum = 0;
+        for (let j = -radius; j <= radius; j++) {
+          const sample = raw[Math.max(0, Math.min(frames, i+j))];
+          const weight = 1 + Math.cos(Math.PI*j/radius);
+          x += sample.x*weight; y += sample.y*weight; weightSum += weight;
+        }
+        const target = Math.hypot(x,y) > 0.18*weightSum ? Math.atan2(x,y) : angle;
+        if (!i) angle = target;
+        const offset = Math.atan2(Math.sin(target-angle), Math.cos(target-angle));
+        const desired = Math.max(-maxSpeed, Math.min(maxSpeed, offset*3));
+        velocity += (desired-velocity)*(1-Math.exp(-6/headingRate));
+        angle += velocity/headingRate;
+        angles.push(angle);
+      }
+      headingCache.set(duration, angles);
+      return angles;
+    }
+
+    let trail = new Path2D();
+    let until = 0;
+    let transform;
+    function photoPosition(photo){
+      const a=points[photo.index-1], b=points[photo.index];
+      return new DOMPoint(a.x+(b.x-a.x)*photo.t,a.y+(b.y-a.y)*photo.t);
+    }
+    const badgeRadius = 19 * unit;
+    const badgeLift = 26 * unit;
+    const badge = layer(Math.ceil(42*unit), Math.ceil(48*unit));
+    const icon = badge.getContext('2d');
+    const badgeX = badge.width/2, badgeY = 21*unit;
+    icon.translate(badgeX,badgeY);
+    icon.scale(unit,unit);
+    icon.fillStyle = '#263f34';
+    icon.strokeStyle = '#fff';
+    icon.lineWidth = 2;
+    icon.lineJoin = 'round';
+    icon.beginPath();
+    icon.arc(0,0,19,Math.PI*.59,Math.PI*2.41);
+    icon.lineTo(0,26);
+    icon.closePath();
+    icon.fill(); icon.stroke();
+    // Camera body, raised viewfinder, lens and amber flash.
+    icon.fillStyle = '#fff';
+    icon.beginPath(); icon.roundRect(-12,-7,24,16,3); icon.fill();
+    icon.beginPath(); icon.roundRect(-6,-10,10,7,2); icon.fill();
+    icon.fillStyle = '#263f34';
+    icon.beginPath(); icon.arc(0,1,5.6,0,2*Math.PI); icon.fill();
+    icon.fillStyle = '#e0ece4';
+    icon.beginPath(); icon.arc(0,1,2.8,0,2*Math.PI); icon.fill();
+    icon.fillStyle = '#ff975d'; icon.fillRect(7,-4,3,2.5);
+    function photoAt(photos,x,y,radius){
+      let match=null, nearest=Infinity;
+      for(const photo of photos){
+        const point=photoPosition(photo).matrixTransform(transform);
+        const centerDistance=Math.hypot(point.x-x,point.y-badgeLift-y);
+        const tipDistance=Math.hypot(point.x-x,point.y-y);
+        if(centerDistance>Math.max(radius,badgeRadius+unit) && tipDistance>radius) continue;
+        const distance=Math.min(centerDistance,tipDistance);
+        if(distance<=nearest){match=photo;nearest=distance;}
+      }
+      return match;
+    }
+    function nearestPhotoPoint(pixelX,pixelY) {
+      const target = new DOMPoint(pixelX,pixelY).matrixTransform(transform.inverse());
+      let best = Infinity, anchor;
+      for (let i=1;i<points.length;i++) {
+        const a=points[i-1], b=points[i];
+        if (b.start) continue;
+        const dx=b.x-a.x, dy=b.y-a.y, len=dx*dx+dy*dy;
+        const t=len ? Math.max(0,Math.min(1,((target.x-a.x)*dx+(target.y-a.y)*dy)/len)) : 0;
+        const error=(a.x+t*dx-target.x)**2+(a.y+t*dy-target.y)**2;
+        if (error < best) {
+          best=error;
+          anchor={index:i,t,at:total ? (a.km+t*(b.km-a.km))/total : 0};
+        }
+      }
+      return anchor;
+    }
+    function draw(canvas, progress, overview = 1, closeup = 3, duration = 15, photos = [], panX = 0, panY = 0) {
+      const km = Math.max(0, Math.min(1, progress)) * total;
+      let lo = 0, hi = points.length;
+      while (lo < hi) {
+        const mid = (lo + hi) >>> 1;
+        if (points[mid].km <= km) lo = mid + 1;
+        else hi = mid;
+      }
+      const index = progress <= 0 ? 0 : Math.max(0, lo - 1);
+      if (index < until) { trail = new Path2D(); until = 0; }
+      if (index > until) {
+        trail.moveTo(points[until].x, points[until].y);
+        while (until < index) {
+          const q = points[++until];
+          if (q.start) trail.moveTo(q.x, q.y);
+          else trail.lineTo(q.x, q.y);
+        }
+      }
+      const p = points[index];
+      const q = points[index + 1];
+      const f = q && !q.start && q.km > p.km ? (km - p.km) / (q.km - p.km) : 0;
+      const x = f ? p.x + (q.x - p.x) * f : p.x;
+      const y = f ? p.y + (q.y - p.y) * f : p.y;
+      const ctx = canvas.getContext('2d');
+      ctx.save();
+      ctx.setTransform(canvas.width / frameW, 0, 0, canvas.height / frameH, 0, 0);
+      // Ease the magnification in log space so both transitions feel symmetric.
+      const edge = Math.max(0, 1 - Math.min(progress, 1-progress) / 0.32);
+      const eased = edge * edge * (3 - 2 * edge);
+      const magnification = overview * Math.pow(closeup, eased);
+      const viewW = (options.follow ? width : frameW) / magnification;
+      const viewH = (options.follow ? height : frameH) / magnification;
+      const originX = Math.max(0, Math.min(width - viewW, x - viewW / 2));
+      const originY = Math.max(0, Math.min(height - viewH, y - viewH / 2));
+      ctx.fillStyle="#edf0e7";ctx.fillRect(0,0,frameW,frameH);
+      ctx.save();
+      ctx.translate(panX,panY);
+      if (options.follow) {
+        const table = headingsFor(duration);
+        const at = Math.min(table.length-1, Math.max(0, progress*(table.length-1)));
+        const i = Math.floor(at), t = at-i;
+        const heading = table[i] + ((table[i+1] ?? table[i])-table[i])*t;
+        ctx.translate(frameW/2, frameH/2);
+        ctx.rotate(-heading);
+        ctx.scale(magnification, magnification);
+        ctx.translate(-originX-viewW/2, -originY-viewH/2);
+      } else {
+        ctx.scale(magnification, magnification);
+        ctx.translate(-originX, -originY);
+      }
+      transform=ctx.getTransform();
+      ctx.imageSmoothingQuality = 'high';
+      ctx.drawImage(base, 0, 0);
+      const painted=drawTiles(ctx,magnification);
+      const pen = unit / magnification;
+      ctx.lineJoin = ctx.lineCap = 'round';
+      ctx.lineWidth = 11 * pen; ctx.strokeStyle = 'rgba(255,255,255,.94)'; ctx.stroke(route);
+      ctx.lineWidth = 5.5 * pen; ctx.strokeStyle = '#8b8272'; ctx.stroke(route);
+      ctx.lineWidth = 7.5 * pen; ctx.strokeStyle = ORANGE; ctx.stroke(trail);
+      ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(x, y); ctx.stroke();
+      ctx.fillStyle = '#fff'; ctx.strokeStyle = '#655a49'; ctx.lineWidth = 2 * pen;
+      ctx.beginPath(); ctx.arc(points[0].x, points[0].y, 4.5 * pen, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+      ctx.beginPath(); ctx.arc(x, y, 14 * pen, 0, Math.PI * 2); ctx.fillStyle = 'rgba(238,100,44,.22)'; ctx.fill();
+      ctx.beginPath(); ctx.arc(x, y, 6.7 * pen, 0, Math.PI * 2); ctx.fillStyle = ORANGE; ctx.fill();
+      ctx.lineWidth = 2.6 * pen; ctx.strokeStyle = '#fff'; ctx.stroke();
+      ctx.restore();
+      ctx.save();
+      ctx.resetTransform();
+      for(const photo of photos){
+        const point=photoPosition(photo).matrixTransform(transform);
+        ctx.drawImage(badge,point.x-badgeX,point.y-badgeLift-badgeY);
+      }
+      ctx.restore();
+      if (!painted && !overviewLoaded) {
+        if(options.comoDemo) label(ctx,'Озеро Комо · схематическая карта',true);
+        else label(ctx, active ? 'Загружается карта…' : 'Карта недоступна · координатная сетка',false);
+      } else if(options.satellite){
+        label(ctx,'EOxCloudless · cloudless.eox.at · EOX IT Services GmbH',true,22);
+        label(ctx,'Modified Copernicus Sentinel data 2025 · CC BY-NC-SA 4.0',true);
+      } else label(ctx,'© OpenStreetMap contributors',true);
+      ctx.restore();
+    }
+    return {draw, waitForTiles, dispose, nearestPhotoPoint, photoAt, distanceKm:total,
+      get loaded(){return visible.filter(entry=>entry.image).length || overviewLoaded;}
+    };
+  };
+})();
