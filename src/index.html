@@ -43,6 +43,20 @@ if (location.protocol !== 'file:' && window.isSecureContext && 'serviceWorker' i
     };
   });
   window.addEventListener('appinstalled', () => { button.hidden = true; });
-  navigator.serviceWorker.register('./sw.js').catch(console.warn);
+  const workers = navigator.serviceWorker;
+  let previous = workers.controller;
+  workers.addEventListener('controllerchange', () => {
+    const updated = previous && previous !== workers.controller;
+    previous = workers.controller;
+    if (updated && !trip && !draft && !busy && !recording) location.reload();
+  });
+  workers.register('./sw.js', {updateViaCache: 'none'}).then(registration => {
+    const check = () => {
+      if (document.visibilityState === 'visible') registration.update().catch(console.warn);
+    };
+    document.addEventListener('visibilitychange', check);
+    window.addEventListener('online', check);
+    check();
+  }).catch(console.warn);
 }
 </script></html>
