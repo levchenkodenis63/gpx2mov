@@ -145,10 +145,32 @@ function startPinch(){
 function beginPan(id,x,y){
   drag={id,x,y,panX,panY,moved:false};
 }
+let lastTap=null, lastPointerType='';
+function handlePhotoTap(event,touch){
+  if(!trip || draft || busy || suppressClick || event.type!=='pointerup'){
+    lastTap=null;
+    return;
+  }
+  const {clientX:x,clientY:y,timeStamp:time}=event;
+  const held=time-touch.downAt>=550;
+  const doubleTap=lastTap && lastTap.map===map && time-lastTap.time<=450 &&
+    Math.hypot(x-lastTap.x,y-lastTap.y)<=28;
+  if(held || doubleTap){
+    lastTap=null;
+    activatePhoto(event);
+  }else{
+    lastTap={map,x,y,time};
+  }
+}
+canvas.oncontextmenu=event=>{
+  if(lastPointerType==='touch') event.preventDefault();
+};
 canvas.onpointerdown=event=>{
+  lastPointerType=event.pointerType;
+  if(lastPointerType!=='touch') lastTap=null;
   if(event.pointerType==='touch' && !busy && map){
     if(!touches.size) suppressClick=false;
-    touches.set(event.pointerId,{x:event.clientX,y:event.clientY});
+    touches.set(event.pointerId,{x:event.clientX,y:event.clientY,downAt:event.timeStamp});
     canvas.setPointerCapture(event.pointerId);
     if(touches.size===1) beginPan(event.pointerId,event.clientX,event.clientY);
     if(touches.size===2){
@@ -163,7 +185,7 @@ canvas.onpointerdown=event=>{
 };
 function movePan(event){
   const dx=event.clientX-drag.x, dy=event.clientY-drag.y;
-  if(!drag.moved && Math.hypot(dx,dy)<5) return;
+  if(!drag.moved && Math.hypot(dx,dy)<(event.pointerType==='touch'?10:5)) return;
   if(!drag.moved){
     stop();drag.moved=true;suppressClick=true;canvas.classList.add('dragging');
   }
@@ -186,8 +208,11 @@ canvas.onpointermove=event=>{
   if(!busy && drag?.id===event.pointerId && (event.buttons & 1)) movePan(event);
 };
 function endDrag(event){
-  if(touches.delete(event.pointerId)){
+  const touch=touches.get(event.pointerId);
+  if(touch){
+    touches.delete(event.pointerId);
     if(!busy && drag?.id===event.pointerId && event.type==='pointerup') movePan(event);
+    handlePhotoTap(event,touch);
     pinch=null;drag=null;canvas.classList.remove('dragging');
     if(touches.size===1){
       const [[id,point]]=touches;
@@ -231,7 +256,7 @@ canvas.onclick=event=>{
   draft.push(point);
   refreshDrawing();
 };
-canvas.ondblclick=event=>{
+function activatePhoto(event){
   if(draft || suppressClick || busy || !trip || !map) return;
   const {x,y,radius}=canvasPoint(event);
   const photo=map.photoAt(photos,x,y,radius);
@@ -243,6 +268,9 @@ canvas.ondblclick=event=>{
     photoAnchor=map.nearestPhotoPoint(x,y);
     if(photoAnchor) el('photoFile').click();
   }
+}
+canvas.ondblclick=event=>{
+  if(lastPointerType!=='touch') activatePhoto(event);
 };
 el('photoFile').onchange=async event=>{
   const file=event.target.files[0];
