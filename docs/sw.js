@@ -1,5 +1,5 @@
 const prefix = 'atlas-trip:' + self.registration.scope + ':';
-const cacheName = prefix + '2d4c7d0e838d5dfd';
+const cacheName = prefix + 'e3f20185e7757040';
 const assets = ['./index.html', './manifest.webmanifest', './icons/atlas-180.png', './icons/atlas-192.png', './icons/atlas-512.png'];
 const urls = new Set(assets.map(path => new URL(path, self.registration.scope).href));
 
