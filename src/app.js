@@ -1,10 +1,10 @@
 'use strict';
 const el = id => document.getElementById(id);
 const canvas = el('canvas');
-const demoPoints = [[45.813,9.083],[45.819,9.078],[45.834,9.076],[45.842,9.083],[45.847,9.097],[45.851,9.113],[45.859,9.119],[45.872,9.138],[45.884,9.145],[45.899,9.151],[45.914,9.145],[45.934,9.135],[45.943,9.127],[45.947,9.132],[45.953,9.151],[45.961,9.17],[45.965,9.186],[45.972,9.2],[45.979,9.212],[45.988,9.229],[45.992,9.244],[45.987,9.259]];
-let trip = {name:'По озеру Комо',source:'Демонстрационный трек',demo:true,segments:[demoPoints.map(([lat,lon])=>({lat,lon}))]};
-let map, portrait=false, progress=.48, animation=0, busy=false, recording=null, lastUrl='';
-const controls=['file','wide','tall','duration','photoDuration','basemap','direction','zoomMode','mapZoom','endZoom','save','play','seek','recenter'];
+let trip=null;
+let map, portrait=false, progress=0, animation=0, busy=false, recording=null, lastUrl='';
+const controls=['drawRoute','file','wide','tall','duration','photoDuration','basemap','direction','zoomMode','endZoom','save','play','seek','recenter'];
+let draft=null;
 const photos=[];
 let fitTrack=false;
 const photoSeconds=()=>Number(el('photoDuration').value);
@@ -60,7 +60,65 @@ function resetPan(){
   el('recenter').hidden=true;
 }
 el('recenter').onclick=()=>{resetPan();display(progress);};
+let selectedLevel=null, previewLevel=null;
+function zoomLimits(){
+  el('zoomIn').disabled=busy || !map || map.level>=map.maxLevel-1e-6;
+  el('zoomOut').disabled=busy || !map || map.level<=1e-6;
+  if(map) el('levelReadout').value='z'+Math.round(map.level);
+}
+function setMapZoom(value,point,world){
+  if(busy || !map) return;
+  const level=Math.max(0,Math.min(map.maxLevel,value));
+  const base=fitTrack ? map.level : (selectedLevel ?? map.baseLevel);
+  selectedLevel=Math.max(0,Math.min(map.maxLevel,base+level-map.level));
+  previewLevel=level;
+  stop();fitTrack=false;
+  clearDownload();
+  display(progress,{...point,world,shift(dx,dy){
+    panX+=dx;panY+=dy;
+    el('recenter').hidden=Math.abs(panX)+Math.abs(panY)<.1;
+  }});
+  zoomLimits();
+}
+function zoomFrom(value,point){
+  if(!busy && map) setMapZoom(value,point,map.worldAt(point.x,point.y));
+}
+for(const [id,step] of [['zoomIn',1],['zoomOut',-1]]){
+  el(id).onclick=()=>zoomFrom(step>0 ? Math.floor(map.level+1e-6)+1 : Math.ceil(map.level-1e-6)-1,{x:canvas.width/2,y:canvas.height/2});
+}
+let wheelFrame=0,wheelDelta=0,wheelPoint;
+canvas.addEventListener('wheel',event=>{
+  if(busy || !map) return;
+  event.preventDefault();
+  const pixels=event.deltaY*(event.deltaMode===1?16:event.deltaMode===2?canvas.clientHeight:1);
+  wheelDelta+=pixels;wheelPoint=canvasPoint(event);
+  if(!wheelFrame) wheelFrame=requestAnimationFrame(()=>{
+    wheelFrame=0;
+    const change=wheelDelta*.004;wheelDelta=0;
+    if(!busy && map) zoomFrom(map.level-change,wheelPoint);
+  });
+},{passive:false});
+
+const touches=new Map();
+let pinch=null;
+function touchPair(){
+  const [a,b]=touches.values();
+  const center=canvasPoint({clientX:(a.x+b.x)/2,clientY:(a.y+b.y)/2});
+  return {center,distance:Math.hypot(a.x-b.x,a.y-b.y)};
+}
+function startPinch(){
+  const {center,distance}=touchPair();
+  pinch={distance:Math.max(1,distance),zoom:map.level,world:map.worldAt(center.x,center.y)};
+  suppressClick=true;stop();
+}
 canvas.onpointerdown=event=>{
+  if(event.pointerType==='touch' && !busy && map){
+    if(!touches.size) suppressClick=false;
+    touches.set(event.pointerId,{x:event.clientX,y:event.clientY,startX:event.clientX,startY:event.clientY});
+    canvas.setPointerCapture(event.pointerId);
+    if(touches.size===2) startPinch();
+    return;
+  }
   if(event.pointerType!=='mouse' || event.button!==0 || busy || !map) return;
   suppressClick=false;
   drag={id:event.pointerId,x:event.clientX,y:event.clientY,panX,panY,moved:false};
@@ -79,31 +137,71 @@ function movePan(event){
   display(progress);
 }
 canvas.onpointermove=event=>{
+  const touch=touches.get(event.pointerId);
+  if(touch){
+    touch.x=event.clientX;touch.y=event.clientY;
+    if(Math.hypot(touch.x-touch.startX,touch.y-touch.startY)>5) suppressClick=true;
+    if(pinch && !busy){
+      const {center,distance}=touchPair();
+      setMapZoom(pinch.zoom+Math.log2(Math.max(1,distance)/pinch.distance),center,pinch.world);
+    }
+    return;
+  }
   if(!busy && drag?.id===event.pointerId && (event.buttons & 1)) movePan(event);
 };
 function endDrag(event){
+  if(touches.delete(event.pointerId)){
+    pinch=null;
+    if(touches.size>=2 && map && !busy) startPinch();
+    return;
+  }
   if(drag?.id!==event.pointerId) return;
   if(!busy && event.type==='pointerup') movePan(event);
   drag=null;canvas.classList.remove('dragging');
   if(canvas.hasPointerCapture(event.pointerId)) canvas.releasePointerCapture(event.pointerId);
 }
 canvas.onpointerup=canvas.onpointercancel=canvas.onlostpointercapture=endDrag;
+function refreshDrawing(){
+  const drawing=draft!==null;
+  el('drawRoute').hidden=drawing;
+  el('drawTools').hidden=!drawing;
+  el('photoPanel').hidden=drawing || !trip;
+  canvas.classList.toggle('drawing',drawing);
+  el('finishRoute').disabled=(draft?.length ?? 0)<2;
+  el('undoPoint').disabled=!draft?.length;
+  lock(false);
+  display(progress);
+}
+el('drawRoute').onclick=()=>{stop();draft=[];refreshDrawing();};
+el('undoPoint').onclick=()=>{draft.pop();refreshDrawing();};
+el('cancelRoute').onclick=()=>{draft=null;refreshDrawing();};
+el('finishRoute').onclick=()=>{
+  const segments=[draft.map(map.locationOf)];
+  draft=null;
+  refreshDrawing();
+  prepare({segments,name:'Ручной маршрут',source:'Нарисован на карте'},portrait,0);
+};
 canvas.onclick=event=>{
-  if(suppressClick || busy || !map) return;
-  const {x,y,radius}=canvasPoint(event);
-  if(map.photoAt(photos,x,y,radius)) return;
-  stop();display(progress);
-  photoAnchor=map.nearestPhotoPoint(x,y);
-  if(photoAnchor) el('photoFile').click();
+  if(!draft || busy || suppressClick || event.detail>1) return;
+  const {x,y}=canvasPoint(event);
+  const point=map.worldAt(x,y);
+  const last=draft.at(-1);
+  if(last && Math.hypot(last.x-point.x,last.y-point.y)<1e-8) return;
+  draft.push(point);
+  refreshDrawing();
 };
 canvas.ondblclick=event=>{
-  if(suppressClick || busy || !map) return;
+  if(draft || suppressClick || busy || !trip || !map) return;
   const {x,y,radius}=canvasPoint(event);
   const photo=map.photoAt(photos,x,y,radius);
-  if(!photo) return;
-  stop();display(progress);
-  el('photoImage').replaceChildren(photo.bitmap);
-  el('photoDialog').showModal();
+  stop();
+  if(photo){
+    el('photoImage').replaceChildren(photo.bitmap);
+    el('photoDialog').showModal();
+  }else{
+    photoAnchor=map.nearestPhotoPoint(x,y);
+    if(photoAnchor) el('photoFile').click();
+  }
 };
 el('photoFile').onchange=async event=>{
   const file=event.target.files[0];
@@ -128,11 +226,12 @@ el('photoFile').onchange=async event=>{
   }catch{el('photoStatus').textContent='Не удалось прочитать снимок. Попробуйте JPEG, PNG или WebP.';}
   finally{URL.revokeObjectURL(url);lock(false);photoAnchor=null;}
 };
-function lock(value) { busy=value; controls.forEach(id=>{el(id).disabled=value;}); }
-function display(p) {
+function lock(value) { busy=value; controls.forEach(id=>{el(id).disabled=value || (draft!==null && id!=='recenter') || (!trip && ['save','play','seek'].includes(id));}); zoomLimits(); }
+function display(p,focus=null) {
   progress=p;
   const frame=timeline(p);
-  map.draw(canvas,frame.at,fitTrack ? 1 : Number(el('mapZoom').value),fitTrack || el('zoomMode').value==='fixed' ? 1 : Number(el('endZoom').value),travelSeconds(),photos,recording ? 0 : panX,recording ? 0 : panY,frame.phase,!fitTrack,el('zoomMode').value==='fixed');
+  map.draw(canvas,frame.at,fitTrack || selectedLevel===null ? 1 : 2**(selectedLevel-map.baseLevel),!trip || fitTrack || el('zoomMode').value==='fixed' ? 1 : Number(el('endZoom').value),travelSeconds(),draft ? [] : photos,recording ? 0 : panX,recording ? 0 : panY,frame.phase,!fitTrack,el('zoomMode').value==='fixed',focus,recording ? null : previewLevel,draft);
+  zoomLimits();
   if(frame.photo && (animation || recording)){
     const ctx=canvas.getContext('2d'), img=frame.photo.bitmap;
     const scale=Math.min(canvas.width*.83/img.width,canvas.height*.75/img.height);
@@ -143,7 +242,7 @@ function display(p) {
   }
   el('seek').value=Math.round(p*1000);
   const time=s=>Math.floor(s/60)+':'+String(Math.floor(s%60)).padStart(2,'0');
-  el('clock').textContent=time(p*seconds())+' / '+time(seconds())+(seconds()%1?',5':'');
+  el('clock').textContent=!trip ? '0:00' : time(p*seconds())+' / '+time(seconds())+(seconds()%1?',5':'');
 }
 function stop() {
   cancelAnimationFrame(animation); animation=0;
@@ -159,29 +258,35 @@ async function prepare(nextTrip, vertical, initial, autoplay=false) {
   try {
     const w=vertical?1080:1920, h=vertical?1920:1080;
     const satellite=el('basemap').value==='satellite';
-    const next=await prepareMap(nextTrip.segments,w,h,{comoDemo:!!nextTrip.demo && !satellite, satellite, flyover:flyover(), follow:el('direction').value==='course',
+    const next=await prepareMap(nextTrip?.segments ?? [],w,h,{satellite, flyover:!!nextTrip && flyover(), follow:!!nextTrip && el('direction').value==='course',
       onTiles:()=>{if(map===next && !animation && !recording) display(progress);}});
     el('imageryCredit').hidden=!satellite;
+    el('localCredit').hidden=satellite || location.protocol!=='file:';
     if(trip!==nextTrip){
-      resetPan();fitTrack=true;photos.length=0;photoAnchor=null;updatePhotoList();el('photoStatus').textContent='';
+      resetPan();selectedLevel=previewLevel=null;fitTrack=true;photos.length=0;photoAnchor=null;updatePhotoList();el('photoStatus').textContent='';
     }
+    if(selectedLevel!==null) selectedLevel=Math.min(next.maxLevel,selectedLevel);
+    if(previewLevel!==null) previewLevel=Math.min(next.maxLevel,previewLevel);
     map?.dispose();trip=nextTrip; map=next; portrait=vertical;
     canvas.width=w; canvas.height=h;
     el('stage').classList.toggle('portrait',vertical);
     el('wide').setAttribute('aria-pressed',String(!vertical));
     el('tall').setAttribute('aria-pressed',String(vertical));
     el('size').textContent=w+' × '+h;
-    el('name').textContent=trip.name; el('source').textContent=trip.source;
-    el('distance').textContent=map.distanceKm.toLocaleString('ru-RU',{maximumFractionDigits:1})+' км';
+    el('name').textContent=trip?.name ?? 'Обзорная карта';
+    el('source').textContent=trip?.source ?? 'Загрузите GPX или нарисуйте маршрут на карте.';
+    el('recenter').textContent=trip?'К маршруту':'К Москве';
+    el('photoPanel').hidden=!trip;
+    el('distance').textContent=trip ? map.distanceKm.toLocaleString('ru-RU',{maximumFractionDigits:1})+' км' : '';
     clearDownload(); display(initial);
-    el('importStatus').textContent=satellite?'Загружаются спутниковые снимки…':trip.demo?'':'Трек загружен. Загружается карта…';
+    el('importStatus').textContent=satellite?'Загружаются спутниковые снимки…':!trip?'':'Трек загружен. Загружается карта…';
     if(autoplay) togglePlay();
     next.waitForTiles().then(()=>{
       const count=next.loaded;
       if(map!==next) return;
       if(!recording) display(progress);
       if(satellite) el('importStatus').textContent=count?'Спутниковая подложка готова.':'Снимки недоступны. Выберите обычную карту или повторите загрузку.';
-      else if(!trip.demo) el('importStatus').textContent=count?'Трек загружен.':'Трек загружен. Карта недоступна, показана координатная сетка.';
+      else if(trip) el('importStatus').textContent=count?'Трек загружен.':'Трек загружен. Карта недоступна, показана координатная сетка.';
     });
   } catch(e){el('status').textContent=e.message;} finally{lock(false);}
 }
@@ -210,7 +315,7 @@ function parseGPX(xml, filename){
   return {segments,name,source:filename};
 }
 async function importFile(file){
-  if(!file||busy) return;
+  if(!file||busy||draft) return;
   stop(); lock(true);
   el('importStatus').textContent='Читаю «'+file.name+'»…';
   try{
@@ -240,24 +345,25 @@ el('basemap').onchange=el('direction').onchange=()=>{
 };
 el('wide').onclick=()=>{if(portrait) prepare(trip,false,progress);};
 el('tall').onclick=()=>{if(!portrait) prepare(trip,true,progress);};
-el('seek').oninput=e=>{fitTrack=false;stop();display(e.target.value/1000);};
+el('seek').oninput=e=>{previewLevel=null;fitTrack=false;stop();display(e.target.value/1000);};
 el('photoDuration').onchange=el('duration').onchange=()=>{stop();clearDownload();display(progress);};
 el('zoomMode').onchange=()=>{
+  previewLevel=null;
   el('endZoomGroup').hidden=el('zoomMode').value==='fixed';
   clearDownload();
   display(progress);
 };
-for(const id of ['mapZoom','endZoom']){
-  el(id).oninput=()=>{
+el('endZoom').oninput=()=>{
+    previewLevel=null;
     fitTrack=false;
-    el(id+'Value').value=Number(el(id).value).toLocaleString('ru-RU')+'×';
+    zoomLimits();
+    el('endZoomValue').value=Number(el('endZoom').value).toLocaleString('ru-RU')+'×';
     clearDownload();
     display(progress);
-  };
-}
+};
 function togglePlay(){
   if(animation){stop();display(progress);return;}
-  resetPan();fitTrack=false;
+  resetPan();previewLevel=null;fitTrack=false;
   const start=performance.now()-(progress>=1?0:progress)*seconds()*1000;
   el('play').textContent='Ⅱ'; el('play').ariaLabel='Пауза';
   function tick(t){const p=Math.min(1,Math.max(0,(t-start)/(seconds()*1000)));display(p);if(p<1) animation=requestAnimationFrame(tick);else stop();}
@@ -266,7 +372,7 @@ function togglePlay(){
 el('play').onclick=togglePlay;
 el('cancel').onclick=()=>recording?.abort();
 el('save').onclick=async()=>{
-  if(!map||busy) return;
+  if(!trip||!map||busy) return;
   const restoreFit=fitTrack;fitTrack=false;
   stop();lock(true);el('cancel').hidden=false;
   const restore=progress;recording=new AbortController();

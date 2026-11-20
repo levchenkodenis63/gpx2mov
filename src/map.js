@@ -26,93 +26,33 @@
     return { x, y: (1 - Math.asinh(Math.tan(lat)) / Math.PI) / 2 };
   }
 
+  const localMap = location.protocol === "file:";
   const tileCache = new Map();
 
   function loadTile(z, x, y, satellite) {
-    const key = satellite
-      ? `https://tiles.maps.eox.at/wmts/1.0.0/s2cloudless-2025_3857/default/g/${z}/${y}/${x}.jpg`
+    const key = satellite || localMap
+      ? `https://tiles.maps.eox.at/wmts/1.0.0/${satellite ? "s2cloudless-2025_3857" : "osm_3857"}/default/g/${z}/${y}/${x}.jpg`
       : `https://tile.openstreetmap.org/${z}/${x}/${y}.png`;
     if (tileCache.has(key)) return tileCache.get(key);
-    const pending = new Promise(resolve => {
-      const img = new Image();
-      img.crossOrigin = 'anonymous';
-      const timer = setTimeout(() => {
-        img.onload = img.onerror = null;
-        img.removeAttribute('src');
-        resolve(null);
-      }, satellite ? 15000 : 5500);
-      img.onload = img.onerror = () => {
-        clearTimeout(timer);
-        resolve(img.naturalWidth ? img : null);
-      };
-      img.src = key;
-    });
+    const pending = (async()=>{
+      const controller=new AbortController();
+      const timer=setTimeout(()=>controller.abort(),12000);
+      let url;
+      try{
+        const response=await fetch(key,{signal:controller.signal});
+        if(!response.ok) return null;
+        url=URL.createObjectURL(await response.blob());
+        const image=new Image();image.src=url;await image.decode();
+        return image;
+      } catch {return null;}
+      finally{clearTimeout(timer);if(url) URL.revokeObjectURL(url);}
+    })();
     tileCache.set(key, pending);
     if (tileCache.size > 180) tileCache.delete(tileCache.keys().next().value);
     pending.then(img => {
       if (!img && tileCache.get(key) === pending) tileCache.delete(key);
     });
     return pending;
-  }
-
-  function drawComo(ctx, width, height, left, top, scale, unit) {
-    const pixel = ([lon, lat]) => {
-      const p = project({ lat, lon });
-      return [(p.x - left) * scale, (p.y - top) * scale];
-    };
-    ctx.fillStyle = '#e5e9db';
-    ctx.fillRect(0, 0, width, height);
-
-    // Stylised contours for the illustrated demo map.
-    const relief = (x,y) => Math.sin(11*x+7*y+Math.sin(9*y))*.7
-      + Math.cos(15*y-5*x)*.45 + Math.sin(21*x-13*y)*.17
-      + Math.cos(37*x+8*y)*.075 + Math.sin(48*y-24*x)*.034;
-    const cell = Math.max(7, Math.round(9 * unit));
-    const cols = Math.ceil(width / cell) + 1;
-    const rows = Math.ceil(height / cell) + 1;
-    const data = new Float32Array(cols * rows);
-    for (let j = 0; j < rows; j++) for (let i = 0; i < cols; i++) {
-      data[j*cols+i] = relief(i*cell/height,j*cell/height);
-    }
-    for (let level = -1.5; level <= 1.5; level += .076) {
-      ctx.beginPath();
-      for (let j = 0; j < rows - 1; j++) for (let i = 0; i < cols - 1; i++) {
-        const k = j * cols + i;
-        const v = [data[k],data[k+1],data[k+cols+1],data[k+cols]];
-        if (Math.min(...v) >= level || Math.max(...v) < level) continue;
-        const dx = [0,1,1,0], dy = [0,0,1,1];
-        let pen = false;
-        for (let e=0;e<4;e++) {
-          const next=(e+1)%4;
-          if ((v[e] < level) === (v[next] < level)) continue;
-          const fraction = (level - v[e]) / (v[next]-v[e]);
-          const x=(i+dx[e]+fraction*(dx[next]-dx[e]))*cell;
-          const y=(j+dy[e]+fraction*(dy[next]-dy[e]))*cell;
-          if (pen) ctx.lineTo(x,y); else ctx.moveTo(x,y);
-          pen=!pen;
-        }
-      }
-      ctx.strokeStyle='rgba(132,151,115,.35)'; ctx.lineWidth=.88*unit; ctx.stroke();
-    }
-    const shore = [[9.077,45.814],[9.062,45.829],[9.077,45.846],[9.086,45.862],[9.103,45.879],[9.120,45.892],[9.121,45.914],[9.113,45.938],[9.126,45.946],[9.149,45.954],[9.178,45.969],[9.192,45.976],[9.197,45.990],[9.219,45.991],[9.233,46.002],[9.229,46.019],[9.235,46.034],[9.260,46.058],[9.265,46.083],[9.260,46.108],[9.288,46.156],[9.351,46.173],[9.412,46.177],[9.371,46.146],[9.332,46.122],[9.312,46.091],[9.308,46.068],[9.310,46.047],[9.285,46.021],[9.286,45.994],[9.308,45.964],[9.337,45.926],[9.349,45.902],[9.343,45.870],[9.363,45.851],[9.404,45.836],[9.387,45.858],[9.364,45.882],[9.354,45.924],[9.329,45.960],[9.302,45.991],[9.284,45.976],[9.266,45.989],[9.259,45.982],[9.244,45.963],[9.219,45.949],[9.184,45.944],[9.152,45.936],[9.133,45.924],[9.135,45.909],[9.146,45.890],[9.158,45.880],[9.137,45.866],[9.122,45.858],[9.112,45.843],[9.100,45.838],[9.096,45.819],[9.083,45.810]];
-    const path = new Path2D();
-    shore.forEach((p,i) => { const xy = pixel(p); if(i) path.lineTo(...xy); else path.moveTo(...xy); });
-    path.closePath();
-    ctx.fillStyle='#9fcacf'; ctx.fill(path);
-    ctx.lineWidth=1.4*unit; ctx.strokeStyle='#77a8ad'; ctx.stroke(path);
-    const places = [
-      ['Como',9.077,45.799],['Cernobbio',9.056,45.848],['Torno',9.131,45.854],
-      ['Argegno',9.095,45.940],['Lenno',9.180,45.981],['Bellagio',9.282,45.982],
-      ['Menaggio',9.209,46.019],['Varenna',9.304,46.016],['Nesso',9.167,45.911],
-      ['Erba',9.234,45.809],['Lecco',9.406,45.856],['Canzo',9.269,45.851],
-      ['Porlezza',9.121,46.036],['Lugano',8.953,46.005],['Moltrasio',9.063,45.876]
-    ];
-    ctx.font='500 '+Math.round(14*unit)+'px system-ui,sans-serif';
-    ctx.textAlign='center'; ctx.lineWidth=3*unit; ctx.strokeStyle='#e9ecdf'; ctx.fillStyle='#586456';
-    for (const [name,lon,lat] of places) {
-      const xy=pixel([lon,lat]); ctx.strokeText(name,...xy); ctx.fillText(name,...xy);
-    }
-    ctx.textAlign='left';
   }
 
   window.prepareMap = async function prepareMap(segments, width, height, options = {}) {
@@ -143,12 +83,16 @@
         previous = location;
       }
     }
-    if (!points.length) throw new Error('Трек не содержит координат');
+    if (!points.length) {
+      const center=project({lat:55.7558,lon:37.6173});
+      minX=maxX=center.x;
+      minY=maxY=center.y;
+    }
     const spanX = maxX - minX, spanY = maxY - minY;
     const fit = options.follow
       ? Math.min(frameW, frameH) * 0.82 / Math.hypot(spanX, spanY)
       : Math.min(landscapeW * 0.76 / spanX, landscapeH * 0.69 / spanY);
-    const scale = Math.min(TILE * 2 ** 18, fit);
+    const scale = points.length ? Math.min(TILE * 2 ** 18, fit) : TILE * 2 ** 3;
     const left = (maxX + minX) / 2 - width / (2 * scale);
     const top = (maxY + minY) / 2 - height / (2 * scale);
     for (const p of points) {
@@ -177,12 +121,14 @@
       bg.fillText(Math.abs(lat).toFixed(3) + '°' + (lat < 0 ? 'S' : 'N'), 4 * unit, py - 4 * unit);
     }
 
-    if (options.comoDemo) drawComo(bg, width, height, left, top, scale, unit);
+
 
     const entries = new Map();
     let visible = [], waiting = [], active = 0, disposed = false, redraw = 0;
     let settleView = null;
-    const maxLevel = options.satellite ? 14 : 19;
+    const maxLevel = options.satellite || localMap ? 18 : 19;
+    const baseLevel=Math.log2(scale/TILE);
+    let currentLevel=baseLevel;
     // Keep a continuous overview beneath on-demand imagery during network
     // gaps, including the first pass through a route during real-time export.
     const overviewLevel=Math.max(0,Math.min(maxLevel,Math.floor(Math.log2(scale/TILE))));
@@ -433,7 +379,7 @@
       }
       return anchor;
     }
-    function draw(canvas, progress, overview = 1, closeup = 3, duration = 15, photos = [], panX = 0, panY = 0, phase = progress, animateCamera = true, fixedZoom = false) {
+    function draw(canvas, progress, overview = 1, closeup = 3, duration = 15, photos = [], panX = 0, panY = 0, phase = progress, animateCamera = true, fixedZoom = false, focus = null, overrideLevel = null, draft = null) {
       const km = Math.max(0, Math.min(1, progress)) * total;
       let lo = 0, hi = points.length;
       while (lo < hi) {
@@ -451,7 +397,7 @@
           else trail.lineTo(q.x, q.y);
         }
       }
-      const p = points[index];
+      const p = points[index] ?? {x:width/2,y:height/2};
       const q = points[index + 1];
       const f = q && !q.start && q.km > p.km ? (km - p.km) / (q.km - p.km) : 0;
       const x = f ? p.x + (q.x - p.x) * f : p.x;
@@ -476,10 +422,12 @@
         magnification=fixedZoom ? overview : Math.exp(
           (1-pullback)*Math.log(overview*closeup)+pullback*Math.log(finalZoom));
       }
+      currentLevel=Math.max(0,Math.min(maxLevel,overrideLevel ?? (baseLevel+Math.log2(magnification))));
+      magnification=2**(currentLevel-baseLevel);
       const viewW = (options.follow ? width : frameW) / magnification;
       const viewH = (options.follow ? height : frameH) / magnification;
-      const originX = Math.max(0, Math.min(width - viewW, x - viewW / 2));
-      const originY = Math.max(0, Math.min(height - viewH, y - viewH / 2));
+      const originX = viewW>width ? (width-viewW)/2 : Math.max(0, Math.min(width - viewW, x - viewW / 2));
+      const originY = viewH>height ? (height-viewH)/2 : Math.max(0, Math.min(height - viewH, y - viewH / 2));
       ctx.fillStyle="#edf0e7";ctx.fillRect(0,0,frameW,frameH);
       ctx.save();
       ctx.translate(panX,panY);
@@ -503,20 +451,41 @@
         ctx.translate(-originX, -originY);
       }
       transform=ctx.getTransform();
+      if (focus) {
+        const target=unprojectFrame(focus.x,focus.y);
+        const current=focus.world.matrixTransform(transform);
+        const dx=target.x-current.x, dy=target.y-current.y;
+        transform.e+=dx;transform.f+=dy;
+        ctx.setTransform(transform);
+        focus.shift(dx,dy);
+      }
       ctx.imageSmoothingQuality = 'high';
       ctx.drawImage(base, 0, 0);
       const painted=drawTiles(ctx,magnification);
-      const pen = unit / magnification;
-      ctx.lineJoin = ctx.lineCap = 'round';
-      ctx.lineWidth = 11 * pen; ctx.strokeStyle = 'rgba(255,255,255,.94)'; ctx.stroke(route);
-      ctx.lineWidth = 5.5 * pen; ctx.strokeStyle = '#8b8272'; ctx.stroke(route);
-      ctx.lineWidth = 7.5 * pen; ctx.strokeStyle = ORANGE; ctx.stroke(trail);
-      ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(x, y); ctx.stroke();
-      ctx.fillStyle = '#fff'; ctx.strokeStyle = '#655a49'; ctx.lineWidth = 2 * pen;
-      ctx.beginPath(); ctx.arc(points[0].x, points[0].y, 4.5 * pen, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
-      ctx.beginPath(); ctx.arc(x, y, 14 * pen, 0, Math.PI * 2); ctx.fillStyle = 'rgba(238,100,44,.22)'; ctx.fill();
-      ctx.beginPath(); ctx.arc(x, y, 6.7 * pen, 0, Math.PI * 2); ctx.fillStyle = ORANGE; ctx.fill();
-      ctx.lineWidth = 2.6 * pen; ctx.strokeStyle = '#fff'; ctx.stroke();
+      if(draft?.length){
+        const pen=unit/magnification;
+        ctx.beginPath();
+        draft.forEach(({x,y},i)=>i ? ctx.lineTo(x,y) : ctx.moveTo(x,y));
+        ctx.lineJoin=ctx.lineCap='round';
+        ctx.lineWidth=9*pen;ctx.strokeStyle='white';ctx.stroke();
+        ctx.lineWidth=5*pen;ctx.strokeStyle=ORANGE;ctx.stroke();
+        for(const {x,y} of draft){
+          ctx.beginPath();ctx.arc(x,y,5*pen,0,2*Math.PI);
+          ctx.fillStyle=ORANGE;ctx.fill();ctx.lineWidth=2*pen;ctx.strokeStyle='white';ctx.stroke();
+        }
+      }else if(!draft && points.length){
+        const pen = unit / magnification;
+        ctx.lineJoin = ctx.lineCap = 'round';
+        ctx.lineWidth = 11 * pen; ctx.strokeStyle = 'rgba(255,255,255,.94)'; ctx.stroke(route);
+        ctx.lineWidth = 5.5 * pen; ctx.strokeStyle = '#8b8272'; ctx.stroke(route);
+        ctx.lineWidth = 7.5 * pen; ctx.strokeStyle = ORANGE; ctx.stroke(trail);
+        ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(x, y); ctx.stroke();
+        ctx.fillStyle = '#fff'; ctx.strokeStyle = '#655a49'; ctx.lineWidth = 2 * pen;
+        ctx.beginPath(); ctx.arc(points[0].x, points[0].y, 4.5 * pen, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+        ctx.beginPath(); ctx.arc(x, y, 14 * pen, 0, Math.PI * 2); ctx.fillStyle = 'rgba(238,100,44,.22)'; ctx.fill();
+        ctx.beginPath(); ctx.arc(x, y, 6.7 * pen, 0, Math.PI * 2); ctx.fillStyle = ORANGE; ctx.fill();
+        ctx.lineWidth = 2.6 * pen; ctx.strokeStyle = '#fff'; ctx.stroke();
+      }
       ctx.restore();
       if(plane){
         ctx.restore();ctx=output;ctx.save();ctx.resetTransform();showPlane(ctx);
@@ -529,15 +498,19 @@
       }
       ctx.restore();
       if (!painted && !overviewLoaded) {
-        if(options.comoDemo) label(ctx,'Озеро Комо · схематическая карта',true);
-        else label(ctx, active ? 'Загружается карта…' : 'Карта недоступна · координатная сетка',false);
+        label(ctx, active ? 'Загружается карта…' : 'Карта недоступна · координатная сетка',false);
       } else if(options.satellite){
         label(ctx,'EOxCloudless · cloudless.eox.at · EOX IT Services GmbH',true,22);
         label(ctx,'Modified Copernicus Sentinel data 2025 · CC BY-NC-SA 4.0',true);
-      } else label(ctx,'© OpenStreetMap contributors',true);
+      } else label(ctx,localMap?'© OpenStreetMap contributors · EOX / MapServer':'© OpenStreetMap contributors',true);
       ctx.restore();
     }
-    return {draw, waitForTiles, dispose, nearestPhotoPoint, photoAt, distanceKm:total,
+    return {draw, waitForTiles, dispose,baseLevel,maxLevel,get level(){return currentLevel;},
+      locationOf:({x,y})=>({
+        lon:((left+x/scale)*360%360+360)%360-180,
+        lat:Math.atan(Math.sinh(Math.PI*(1-2*Math.max(0,Math.min(1,top+y/scale)))))/RAD
+      }),
+      worldAt:(x,y)=>unprojectFrame(x,y).matrixTransform(transform.inverse()), nearestPhotoPoint, photoAt, distanceKm:total,
       get loading(){return active>0 || waiting.length>0;},
       get loaded(){return visible.filter(entry=>entry.image).length || overviewLoaded;}
     };
