@@ -278,9 +278,9 @@ el('save').onclick=async()=>{
     const loaded=map.loaded;
     if(el('basemap').value==='satellite' && !loaded) throw Error('Снимки недоступны. Переключите тип карты и повторите экспорт.');
     const {blob,extension}=await recordTrip(canvas,seconds(),display,p=>{
-      const status='Запись '+Math.round(100*p)+' %. Оставьте вкладку открытой.';
+      const status='Экспорт '+Math.round(100*p)+' %. Оставьте вкладку открытой.';
       if(el('status').textContent!==status) el('status').textContent=status;
-    },recording.signal);
+    },recording.signal,()=>map.loading ? map.waitForTiles() : null);
     clearDownload();lastUrl=URL.createObjectURL(blob);
     const link=el('download');link.href=lastUrl;link.download=trip.name.replace(/[^\p{L}\d _.-]/gu,'_')+'.'+extension;
     link.hidden=false;link.click();el('status').textContent='Видео готово · '+extension.toUpperCase();

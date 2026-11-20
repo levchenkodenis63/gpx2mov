@@ -538,6 +538,7 @@
       ctx.restore();
     }
     return {draw, waitForTiles, dispose, nearestPhotoPoint, photoAt, distanceKm:total,
+      get loading(){return active>0 || waiting.length>0;},
       get loaded(){return visible.filter(entry=>entry.image).length || overviewLoaded;}
     };
   };
