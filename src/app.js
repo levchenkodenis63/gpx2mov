@@ -28,8 +28,8 @@ function timeline(p){
 const mobileMenu=el('mobileMenu');
 const narrowScreen=matchMedia('(max-width:700px)');
 const menuItems=[
-  document.querySelector('.controls'), document.querySelector('.settings'),
-  el('photoPanel'), el('installApp')
+  document.querySelector('.settings'),
+  el('photoPanel'), el('installApp'), el('drawRoute'), el('drawTools')
 ].map(item=>{
   const home=document.createComment('menu item');
   item.before(home);
@@ -41,7 +41,10 @@ function closeMobileMenu(){
 function placeMenuItems(){
   closeMobileMenu();
   for(const {item,home} of menuItems){
-    if(narrowScreen.matches) el('menuControls').append(item);
+    if(narrowScreen.matches){
+      const drawingControl=item.id==='drawRoute' || item.id==='drawTools';
+      el(drawingControl?'mobileDrawControls':'menuControls').append(item);
+    }
     else home.after(item);
   }
 }
@@ -49,7 +52,7 @@ el('openMenu').onclick=()=>{
   mobileMenu.showModal();
   mobileMenu.scrollTop=0;
 };
-narrowScreen.addEventListener('change',placeMenuItems);
+narrowScreen.addEventListener('change',()=>{placeMenuItems();if(map && !recording) display(progress);});
 placeMenuItems();
 
 function locatePhoto(photo){
@@ -104,7 +107,7 @@ el('recenter').onclick=()=>{
   stop();
   locationStatus.hidden=true;
   if(draft ? draft.length : trip){
-    const {world,level}=map.routeView(draft);
+    const {world,level}=map.routeView(draft,visibleFrameHeight());
     centerView(world,level);
     return;
   }
@@ -325,14 +328,19 @@ el('photoFile').onchange=async event=>{
   finally{URL.revokeObjectURL(url);lock(false);photoAnchor=null;}
 };
 function lock(value) { busy=value; controls.forEach(id=>{el(id).disabled=value || (draft!==null && id!=='recenter') || (!trip && ['save','play','seek'].includes(id));}); zoomLimits(); }
+function visibleFrameHeight(){
+  return portrait && narrowScreen.matches && !recording ? canvas.width*5/4 : canvas.height;
+}
 function display(p,focus=null) {
   progress=p;
   const frame=timeline(p);
-  map.draw(canvas,frame.at,fitTrack || selectedLevel===null ? 1 : 2**(selectedLevel-map.baseLevel),!trip || fitTrack || el('zoomMode').value==='fixed' ? 1 : Number(el('endZoom').value),travelSeconds(),draft ? [] : photos,recording ? 0 : panX,recording ? 0 : panY,frame.phase,!fitTrack,el('zoomMode').value==='fixed',focus,recording ? null : previewLevel,draft);
+  const previewHeight=visibleFrameHeight();
+  const crop=(canvas.height-previewHeight)/2;
+  map.draw(canvas,frame.at,fitTrack || selectedLevel===null ? 1 : 2**(selectedLevel-map.baseLevel),!trip || fitTrack || el('zoomMode').value==='fixed' ? 1 : Number(el('endZoom').value),travelSeconds(),draft ? [] : photos,recording ? 0 : panX,recording ? 0 : panY,frame.phase,!fitTrack,el('zoomMode').value==='fixed',focus,recording ? null : previewLevel,draft,crop);
   zoomLimits();
   if(frame.photo && (animation || recording)){
     const ctx=canvas.getContext('2d'), img=frame.photo.bitmap;
-    const scale=Math.min(canvas.width*.83/img.width,canvas.height*.75/img.height);
+    const scale=Math.min(canvas.width*.83/img.width,previewHeight*.75/img.height);
     const w=img.width*scale,h=img.height*scale,x=(canvas.width-w)/2,y=(canvas.height-h)/2;
     ctx.save();ctx.shadowColor='#0008';ctx.shadowBlur=18;ctx.fillStyle='white';
     ctx.fillRect(x-5,y-5,w+10,h+10);ctx.shadowBlur=0;

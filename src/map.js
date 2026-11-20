@@ -379,7 +379,7 @@
       }
       return anchor;
     }
-    function draw(canvas, progress, overview = 1, closeup = 3, duration = 15, photos = [], panX = 0, panY = 0, phase = progress, animateCamera = true, fixedZoom = false, focus = null, overrideLevel = null, draft = null) {
+    function draw(canvas, progress, overview = 1, closeup = 3, duration = 15, photos = [], panX = 0, panY = 0, phase = progress, animateCamera = true, fixedZoom = false, focus = null, overrideLevel = null, draft = null, previewCrop = 0) {
       const km = Math.max(0, Math.min(1, progress)) * total;
       let lo = 0, hi = points.length;
       while (lo < hi) {
@@ -497,6 +497,7 @@
         ctx.drawImage(badge,point.x-badgeX,point.y-badgeLift-badgeY);
       }
       ctx.restore();
+      ctx.translate(0,-previewCrop);
       if (!painted && !overviewLoaded) {
         label(ctx, active ? 'Загружается карта…' : 'Карта недоступна · координатная сетка',false);
       } else if(options.satellite){
@@ -510,13 +511,13 @@
         const p=project(location);
         return new DOMPoint((p.x-left)*scale,(p.y-top)*scale);
       },
-      routeView(draft){
+      routeView(draft,visibleHeight=frameH){
         let x0=Infinity,x1=-Infinity,y0=Infinity,y1=-Infinity;
         for(const {x,y} of draft ?? points){
           x0=Math.min(x0,x);x1=Math.max(x1,x);
           y0=Math.min(y0,y);y1=Math.max(y1,y);
         }
-        const fit=Math.min(frameW*.80/(x1-x0),frameH*.78/(y1-y0));
+        const fit=Math.min(frameW*.80/(x1-x0),visibleHeight*.78/(y1-y0));
         return {world:new DOMPoint((x0+x1)/2,(y0+y1)/2),level:Number.isFinite(fit)?baseLevel+Math.log2(fit):currentLevel};
       },
       locationOf:({x,y})=>({
