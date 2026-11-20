@@ -500,4 +500,4 @@ el('save').onclick=async()=>{
   }catch(e){el('status').textContent=e.name==='AbortError'?'Запись отменена.':e.message;}
   finally{fitTrack=restoreFit;recording=null;el('cancel').hidden=true;lock(false);display(restore);}
 };
-prepare(trip,false,progress);
+prepare(trip,narrowScreen.matches,progress);
