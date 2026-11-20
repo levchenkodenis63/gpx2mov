@@ -383,10 +383,32 @@
     icon.fillStyle = '#e0ece4';
     icon.beginPath(); icon.arc(0,1,2.8,0,2*Math.PI); icon.fill();
     icon.fillStyle = '#ff975d'; icon.fillRect(7,-4,3,2.5);
+    // The perspective of a flat map plane. These transforms are also used
+    // for pointer picking and upright photo markers.
+    const plane=options.flyover ? layer(frameW,frameH) : null;
+    let pitch=0;
+    function projectFrame(point){
+      const u=point.y/frameH, v=u/(1+pitch*(1-u));
+      return new DOMPoint(frameW/2+(point.x-frameW/2)*(1+pitch*v),v*frameH);
+    }
+    function unprojectFrame(x,y){
+      const v=y/frameH, factor=1+pitch*v;
+      return new DOMPoint(frameW/2+(x-frameW/2)/factor,y*(1+pitch)/factor);
+    }
+    function showPlane(output){
+      if(!pitch){output.drawImage(plane,0,0);return;}
+      // Draw horizontal strips using the inverse ground-plane projection.
+      for(let y=0;y<frameH;y+=6){
+        const h=Math.min(6,frameH-y);
+        const top=unprojectFrame(0,y).y, bottom=unprojectFrame(0,y+h).y;
+        const w=frameW*(1+pitch*(y+h/2)/frameH);
+        output.drawImage(plane,0,top,frameW,bottom-top,(frameW-w)/2,y,w,h);
+      }
+    }
     function photoAt(photos,x,y,radius){
       let match=null, nearest=Infinity;
       for(const photo of photos){
-        const point=photoPosition(photo).matrixTransform(transform);
+        const point=projectFrame(photoPosition(photo).matrixTransform(transform));
         const centerDistance=Math.hypot(point.x-x,point.y-badgeLift-y);
         const tipDistance=Math.hypot(point.x-x,point.y-y);
         if(centerDistance>Math.max(radius,badgeRadius+unit) && tipDistance>radius) continue;
@@ -396,7 +418,7 @@
       return match;
     }
     function nearestPhotoPoint(pixelX,pixelY) {
-      const target = new DOMPoint(pixelX,pixelY).matrixTransform(transform.inverse());
+      const target = unprojectFrame(pixelX,pixelY).matrixTransform(transform.inverse());
       let best = Infinity, anchor;
       for (let i=1;i<points.length;i++) {
         const a=points[i-1], b=points[i];
@@ -411,7 +433,7 @@
       }
       return anchor;
     }
-    function draw(canvas, progress, overview = 1, closeup = 3, duration = 15, photos = [], panX = 0, panY = 0) {
+    function draw(canvas, progress, overview = 1, closeup = 3, duration = 15, photos = [], panX = 0, panY = 0, phase = progress, animateCamera = true, fixedZoom = false) {
       const km = Math.max(0, Math.min(1, progress)) * total;
       let lo = 0, hi = points.length;
       while (lo < hi) {
@@ -434,13 +456,26 @@
       const f = q && !q.start && q.km > p.km ? (km - p.km) / (q.km - p.km) : 0;
       const x = f ? p.x + (q.x - p.x) * f : p.x;
       const y = f ? p.y + (q.y - p.y) * f : p.y;
-      const ctx = canvas.getContext('2d');
+      const output=canvas.getContext('2d');
+      let ctx=plane ? plane.getContext('2d') : output;
       ctx.save();
       ctx.setTransform(canvas.width / frameW, 0, 0, canvas.height / frameH, 0, 0);
       // Ease the magnification in log space so both transitions feel symmetric.
       const edge = Math.max(0, 1 - Math.min(progress, 1-progress) / 0.32);
       const eased = edge * edge * (3 - 2 * edge);
-      const magnification = overview * Math.pow(closeup, eased);
+      let magnification = overview * Math.pow(closeup, eased);
+      let pullback=0;
+      pitch=0;
+      if(options.flyover && animateCamera){
+        const smooth=t=>{t=Math.max(0,Math.min(1,t));return t*t*(3-2*t);};
+        const launch=smooth(phase/.12);
+        pullback=smooth((phase-.76)/.20);
+        pitch=.85*launch*(1-pullback);
+        // At the finish keep the whole route inside the actual output frame.
+        const finalZoom=Math.min(1,frameW*.80/Math.max(1,spanX*scale),frameH*.78/Math.max(1,spanY*scale));
+        magnification=fixedZoom ? overview : Math.exp(
+          (1-pullback)*Math.log(overview*closeup)+pullback*Math.log(finalZoom));
+      }
       const viewW = (options.follow ? width : frameW) / magnification;
       const viewH = (options.follow ? height : frameH) / magnification;
       const originX = Math.max(0, Math.min(width - viewW, x - viewW / 2));
@@ -448,7 +483,13 @@
       ctx.fillStyle="#edf0e7";ctx.fillRect(0,0,frameW,frameH);
       ctx.save();
       ctx.translate(panX,panY);
-      if (options.follow) {
+      if(options.flyover && animateCamera){
+        const centerX=x+(width/2-x)*pullback, centerY=y+(height/2-y)*pullback;
+        const aim=unprojectFrame(frameW/2,frameH/2);
+        ctx.translate(aim.x,aim.y);
+        ctx.scale(magnification,magnification);
+        ctx.translate(-centerX,-centerY);
+      } else if (options.follow) {
         const table = headingsFor(duration);
         const at = Math.min(table.length-1, Math.max(0, progress*(table.length-1)));
         const i = Math.floor(at), t = at-i;
@@ -477,10 +518,13 @@
       ctx.beginPath(); ctx.arc(x, y, 6.7 * pen, 0, Math.PI * 2); ctx.fillStyle = ORANGE; ctx.fill();
       ctx.lineWidth = 2.6 * pen; ctx.strokeStyle = '#fff'; ctx.stroke();
       ctx.restore();
+      if(plane){
+        ctx.restore();ctx=output;ctx.save();ctx.resetTransform();showPlane(ctx);
+      }
       ctx.save();
       ctx.resetTransform();
       for(const photo of photos){
-        const point=photoPosition(photo).matrixTransform(transform);
+        const point=projectFrame(photoPosition(photo).matrixTransform(transform));
         ctx.drawImage(badge,point.x-badgeX,point.y-badgeLift-badgeY);
       }
       ctx.restore();

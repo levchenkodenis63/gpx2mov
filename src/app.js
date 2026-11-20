@@ -10,19 +10,24 @@ let fitTrack=false;
 const photoSeconds=()=>Number(el('photoDuration').value);
 const travelSeconds=()=>Number(el('duration').value);
 const seconds=()=>travelSeconds()+photos.length*photoSeconds();
+const flyover=()=>el('direction').value==='flyover';
+const depart=.12, arrive=.76;
+function cameraTime(at){return flyover()?depart+(arrive-depart)*at:at;}
 function timeline(p){
   let elapsed=p*seconds();
   for(const photo of photos){
-    const arrival=photo.at*travelSeconds();
+    const arrival=cameraTime(photo.at)*travelSeconds();
     if(elapsed<arrival) break;
-    if(elapsed<arrival+photoSeconds()) return {at:photo.at,photo};
+    if(elapsed<arrival+photoSeconds()) return {at:photo.at,phase:cameraTime(photo.at),photo};
     elapsed-=photoSeconds();
   }
-  return {at:Math.min(1,Math.max(0,elapsed/travelSeconds()))};
+  const phase=Math.min(1,Math.max(0,elapsed/travelSeconds()));
+  const at=flyover()?Math.min(1,Math.max(0,(phase-depart)/(arrive-depart))):phase;
+  return {at,phase};
 }
 function locatePhoto(photo){
   const index=photos.indexOf(photo);
-  const middle=photo.at*travelSeconds()+(index+.5)*photoSeconds();
+  const middle=cameraTime(photo.at)*travelSeconds()+(index+.5)*photoSeconds();
   stop();display(middle/seconds());
 }
 function updatePhotoList(){
@@ -114,11 +119,11 @@ el('photoFile').onchange=async event=>{
     bitmap.height=Math.max(1,Math.round(image.naturalHeight*ratio));
     bitmap.getContext('2d').drawImage(image,0,0,bitmap.width,bitmap.height);
     const photo={...photoAnchor,bitmap,name:file.name};
-    const routeAt=timeline(progress).at;
+    const {at:routeAt,phase}=timeline(progress);
     photos.push(photo);photos.sort((a,b)=>a.at-b.at);
     clearDownload();updatePhotoList();
     const holdsBefore=photos.filter(item=>item.at<routeAt).length;
-    display((routeAt*travelSeconds()+holdsBefore*photoSeconds())/seconds());
+    display((phase*travelSeconds()+holdsBefore*photoSeconds())/seconds());
     el('photoStatus').textContent='';
   }catch{el('photoStatus').textContent='Не удалось прочитать снимок. Попробуйте JPEG, PNG или WebP.';}
   finally{URL.revokeObjectURL(url);lock(false);photoAnchor=null;}
@@ -127,7 +132,7 @@ function lock(value) { busy=value; controls.forEach(id=>{el(id).disabled=value;}
 function display(p) {
   progress=p;
   const frame=timeline(p);
-  map.draw(canvas,frame.at,fitTrack ? 1 : Number(el('mapZoom').value),fitTrack || el('zoomMode').value==='fixed' ? 1 : Number(el('endZoom').value),travelSeconds(),photos,recording ? 0 : panX,recording ? 0 : panY);
+  map.draw(canvas,frame.at,fitTrack ? 1 : Number(el('mapZoom').value),fitTrack || el('zoomMode').value==='fixed' ? 1 : Number(el('endZoom').value),travelSeconds(),photos,recording ? 0 : panX,recording ? 0 : panY,frame.phase,!fitTrack,el('zoomMode').value==='fixed');
   if(frame.photo && (animation || recording)){
     const ctx=canvas.getContext('2d'), img=frame.photo.bitmap;
     const scale=Math.min(canvas.width*.83/img.width,canvas.height*.75/img.height);
@@ -154,7 +159,7 @@ async function prepare(nextTrip, vertical, initial, autoplay=false) {
   try {
     const w=vertical?1080:1920, h=vertical?1920:1080;
     const satellite=el('basemap').value==='satellite';
-    const next=await prepareMap(nextTrip.segments,w,h,{comoDemo:!!nextTrip.demo && !satellite, satellite, follow:el('direction').value==='course',
+    const next=await prepareMap(nextTrip.segments,w,h,{comoDemo:!!nextTrip.demo && !satellite, satellite, flyover:flyover(), follow:el('direction').value==='course',
       onTiles:()=>{if(map===next && !animation && !recording) display(progress);}});
     el('imageryCredit').hidden=!satellite;
     if(trip!==nextTrip){
@@ -225,7 +230,14 @@ const stage=el('stage');
 stage.ondragover=e=>{e.preventDefault();stage.classList.add('drag');};
 stage.ondragleave=()=>stage.classList.remove('drag');
 stage.ondrop=e=>{e.preventDefault();stage.classList.remove('drag');importFile(e.dataTransfer.files[0]);};
-el('basemap').onchange=el('direction').onchange=()=>prepare(trip,portrait,progress,Boolean(animation));
+function updateCameraLabels(){
+  el('zoomMode').options[0].textContent=flyover()?'Общий план на финише':'Приближение на старте и финише';
+  el('endZoomGroup').querySelector('label').firstChild.textContent=flyover()?'Приближение во время поездки ':'Приближение у старта и финиша ';
+}
+updateCameraLabels();
+el('basemap').onchange=el('direction').onchange=()=>{
+  updateCameraLabels();prepare(trip,portrait,progress,Boolean(animation));
+};
 el('wide').onclick=()=>{if(portrait) prepare(trip,false,progress);};
 el('tall').onclick=()=>{if(!portrait) prepare(trip,true,progress);};
 el('seek').oninput=e=>{fitTrack=false;stop();display(e.target.value/1000);};
