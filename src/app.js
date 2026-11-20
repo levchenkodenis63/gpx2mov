@@ -29,7 +29,7 @@ const mobileMenu=el('mobileMenu');
 const narrowScreen=matchMedia('(max-width:700px)');
 const menuItems=[
   document.querySelector('.settings'),
-  el('photoPanel'), el('installApp'), el('drawRoute'), el('drawTools')
+  el('photoPanel'), el('installApp'), el('routeInputs')
 ].map(item=>{
   const home=document.createComment('menu item');
   item.before(home);
@@ -42,8 +42,7 @@ function placeMenuItems(){
   closeMobileMenu();
   for(const {item,home} of menuItems){
     if(narrowScreen.matches){
-      const drawingControl=item.id==='drawRoute' || item.id==='drawTools';
-      el(drawingControl?'mobileDrawControls':'menuControls').append(item);
+      el(item.id==='routeInputs'?'mobileDrawControls':'menuControls').append(item);
     }
     else home.after(item);
   }
