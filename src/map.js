@@ -437,7 +437,7 @@
         ctx.translate(aim.x,aim.y);
         ctx.scale(magnification,magnification);
         ctx.translate(-centerX,-centerY);
-      } else if (options.follow) {
+      } else if (options.follow && animateCamera) {
         const table = headingsFor(duration);
         const at = Math.min(table.length-1, Math.max(0, progress*(table.length-1)));
         const i = Math.floor(at), t = at-i;
@@ -506,6 +506,19 @@
       ctx.restore();
     }
     return {draw, waitForTiles, dispose,baseLevel,maxLevel,get level(){return currentLevel;},
+      pointFor(location){
+        const p=project(location);
+        return new DOMPoint((p.x-left)*scale,(p.y-top)*scale);
+      },
+      routeView(draft){
+        let x0=Infinity,x1=-Infinity,y0=Infinity,y1=-Infinity;
+        for(const {x,y} of draft ?? points){
+          x0=Math.min(x0,x);x1=Math.max(x1,x);
+          y0=Math.min(y0,y);y1=Math.max(y1,y);
+        }
+        const fit=Math.min(frameW*.80/(x1-x0),frameH*.78/(y1-y0));
+        return {world:new DOMPoint((x0+x1)/2,(y0+y1)/2),level:Number.isFinite(fit)?baseLevel+Math.log2(fit):currentLevel};
+      },
       locationOf:({x,y})=>({
         lon:((left+x/scale)*360%360+360)%360-180,
         lat:Math.atan(Math.sinh(Math.PI*(1-2*Math.max(0,Math.min(1,top+y/scale)))))/RAD

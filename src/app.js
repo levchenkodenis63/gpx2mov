@@ -57,9 +57,41 @@ function canvasPoint(event){
 let panX=0, panY=0, drag=null, suppressClick=false;
 function resetPan(){
   panX=0;panY=0;
-  el('recenter').hidden=true;
 }
-el('recenter').onclick=()=>{resetPan();display(progress);};
+const locationStatus=el('locationStatus');
+let centerRequest=0;
+function updateCenterButton(){
+  const label=(draft ? draft.length : trip) ? 'Показать маршрут целиком' : 'Показать моё местоположение';
+  el('recenter').title=label;
+  el('recenter').setAttribute('aria-label',label);
+}
+function centerView(world,level){
+  resetPan();fitTrack=true;
+  previewLevel=Math.max(0,Math.min(map.maxLevel,level));
+  display(progress,{x:canvas.width/2,y:canvas.height/2,world,shift(dx,dy){panX+=dx;panY+=dy;}});
+}
+el('recenter').onclick=()=>{
+  if(!map || busy) return;
+  const request=++centerRequest, currentMap=map, currentDraft=draft;
+  stop();
+  locationStatus.hidden=true;
+  if(draft ? draft.length : trip){
+    const {world,level}=map.routeView(draft);
+    centerView(world,level);
+    return;
+  }
+  const finish=(position)=>{
+    if(request!==centerRequest || busy || map!==currentMap || draft!==currentDraft || draft?.length) return;
+    const location=position ? {lat:position.coords.latitude,lon:position.coords.longitude} : {lat:55.7558,lon:37.6173};
+    centerView(map.pointFor(location),position ? map.level : 3);
+    locationStatus.textContent=position ? '' : 'Геопозиция недоступна. Карта центрирована по Москве.';
+    locationStatus.hidden=!!position;
+  };
+  if(!navigator.geolocation){finish(null);return;}
+  locationStatus.textContent='Определяем местоположение…';
+  locationStatus.hidden=false;
+  navigator.geolocation.getCurrentPosition(finish,()=>finish(null),{timeout:10000,maximumAge:60000});
+};
 let selectedLevel=null, previewLevel=null;
 function zoomLimits(){
   el('zoomIn').disabled=busy || !map || map.level>=map.maxLevel-1e-6;
@@ -76,7 +108,6 @@ function setMapZoom(value,point,world){
   clearDownload();
   display(progress,{...point,world,shift(dx,dy){
     panX+=dx;panY+=dy;
-    el('recenter').hidden=Math.abs(panX)+Math.abs(panY)<.1;
   }});
   zoomLimits();
 }
@@ -111,17 +142,23 @@ function startPinch(){
   pinch={distance:Math.max(1,distance),zoom:map.level,world:map.worldAt(center.x,center.y)};
   suppressClick=true;stop();
 }
+function beginPan(id,x,y){
+  drag={id,x,y,panX,panY,moved:false};
+}
 canvas.onpointerdown=event=>{
   if(event.pointerType==='touch' && !busy && map){
     if(!touches.size) suppressClick=false;
-    touches.set(event.pointerId,{x:event.clientX,y:event.clientY,startX:event.clientX,startY:event.clientY});
+    touches.set(event.pointerId,{x:event.clientX,y:event.clientY});
     canvas.setPointerCapture(event.pointerId);
-    if(touches.size===2) startPinch();
+    if(touches.size===1) beginPan(event.pointerId,event.clientX,event.clientY);
+    if(touches.size===2){
+      drag=null;canvas.classList.remove('dragging');startPinch();
+    }
     return;
   }
   if(event.pointerType!=='mouse' || event.button!==0 || busy || !map) return;
   suppressClick=false;
-  drag={id:event.pointerId,x:event.clientX,y:event.clientY,panX,panY,moved:false};
+  beginPan(event.pointerId,event.clientX,event.clientY);
   canvas.setPointerCapture(event.pointerId);
 };
 function movePan(event){
@@ -133,14 +170,13 @@ function movePan(event){
   const rect=canvas.getBoundingClientRect();
   const scale=Math.min(rect.width/canvas.width,rect.height/canvas.height);
   panX=drag.panX+dx/scale;panY=drag.panY+dy/scale;
-  el('recenter').hidden=!(panX || panY);
   display(progress);
 }
 canvas.onpointermove=event=>{
   const touch=touches.get(event.pointerId);
   if(touch){
     touch.x=event.clientX;touch.y=event.clientY;
-    if(Math.hypot(touch.x-touch.startX,touch.y-touch.startY)>5) suppressClick=true;
+    if(!busy && drag?.id===event.pointerId) movePan(event);
     if(pinch && !busy){
       const {center,distance}=touchPair();
       setMapZoom(pinch.zoom+Math.log2(Math.max(1,distance)/pinch.distance),center,pinch.world);
@@ -151,8 +187,12 @@ canvas.onpointermove=event=>{
 };
 function endDrag(event){
   if(touches.delete(event.pointerId)){
-    pinch=null;
-    if(touches.size>=2 && map && !busy) startPinch();
+    if(!busy && drag?.id===event.pointerId && event.type==='pointerup') movePan(event);
+    pinch=null;drag=null;canvas.classList.remove('dragging');
+    if(touches.size===1){
+      const [[id,point]]=touches;
+      beginPan(id,point.x,point.y);
+    }else if(touches.size>=2 && map && !busy) startPinch();
     return;
   }
   if(drag?.id!==event.pointerId) return;
@@ -162,6 +202,7 @@ function endDrag(event){
 }
 canvas.onpointerup=canvas.onpointercancel=canvas.onlostpointercapture=endDrag;
 function refreshDrawing(){
+  centerRequest++;locationStatus.hidden=true;updateCenterButton();
   const drawing=draft!==null;
   el('drawRoute').hidden=drawing;
   el('drawTools').hidden=!drawing;
@@ -254,6 +295,7 @@ function clearDownload(){
   lastUrl='';
 }
 async function prepare(nextTrip, vertical, initial, autoplay=false) {
+  centerRequest++;locationStatus.hidden=true;
   stop(); lock(true); el('status').textContent='';
   try {
     const w=vertical?1080:1920, h=vertical?1920:1080;
@@ -275,7 +317,7 @@ async function prepare(nextTrip, vertical, initial, autoplay=false) {
     el('size').textContent=w+' × '+h;
     el('name').textContent=trip?.name ?? 'Обзорная карта';
     el('source').textContent=trip?.source ?? 'Загрузите GPX или нарисуйте маршрут на карте.';
-    el('recenter').textContent=trip?'К маршруту':'К Москве';
+    updateCenterButton();
     el('photoPanel').hidden=!trip;
     el('distance').textContent=trip ? map.distanceKm.toLocaleString('ru-RU',{maximumFractionDigits:1})+' км' : '';
     clearDownload(); display(initial);

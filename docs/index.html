@@ -1,8 +1,11 @@
 <!doctype html><html lang="ru"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Атлас поездки — GPX в видео</title>
+<meta name="theme-color" content="#476247">
+<link rel="manifest" href="./manifest.webmanifest">
+<link rel="apple-touch-icon" href="./icons/atlas-180.png">
 <style>
 *{box-sizing:border-box}body{margin:0;color:#242e2b;background:#f8f9f6;font:16px Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}header{border-bottom:1px solid #d9dcd5;background:#fff}header>div,main{max-width:1460px;margin:auto;padding:0 clamp(20px,4vw,70px)}header>div{height:69px;display:flex;align-items:center;justify-content:space-between}.brand{font-size:21px;font-weight:720;letter-spacing:-1px;display:flex;align-items:center;gap:10px}.brand svg{background:#303e34;border-radius:9px;padding:6px;width:36px;height:36px}.tag,small,.meta{font:13px ui-monospace,monospace;color:#617066}.top{margin:40px 0 26px}h1{font-size:clamp(30px,3vw,48px);letter-spacing:-.055em;margin:0}.workspace{display:grid;grid-template-columns:minmax(0,1fr) 315px;gap:20px;align-items:start}.card{background:white;border:1px solid #d8ded5;border-radius:14px;overflow:hidden}.panehead{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:18px 21px}.panehead h2,aside h2{font-size:18px;margin:0;letter-spacing:-.035em}.stage{background:#e6eae2;display:flex;align-items:center;justify-content:center;aspect-ratio:16/9;position:relative}.stage canvas{display:block;max-width:100%;max-height:100%;object-fit:contain;height:100%}.controls{padding:17px 21px;display:flex;align-items:center;gap:14px}.controls input{flex:1;min-width:40px;accent-color:#e36336}.controls button{width:38px;height:38px;border-radius:50%;padding:0;background:#27392e;color:white}.info{margin-top:16px;padding:20px 22px;display:flex;align-items:center;gap:16px}.info strong{display:block;overflow-wrap:anywhere}.info small{display:block;margin-top:5px}.routeicon{background:#eef2e9;color:#3d5742;border-radius:12px;width:45px;height:45px;display:grid;place-items:center;flex:none}.km{margin-left:auto;white-space:nowrap;font-weight:600}.settings{padding:23px}.group{margin-top:23px}.label{font-size:14px;font-weight:650;display:block;margin-bottom:10px}button,select,.upload{font:inherit;border:1px solid #cfd6cc;border-radius:8px;background:white;color:inherit;padding:10px;cursor:pointer}button:disabled,select:disabled{opacity:.5;cursor:default}.upload{display:flex;gap:9px;align-items:center;justify-content:center;background:#f6f8f3;border:1px dashed #95a78f;padding:15px;font-size:15px;width:100%}.formats{display:flex;gap:8px}.format{flex:1;display:grid;justify-items:center;gap:8px;font-size:14px;font-weight:650}.format[aria-pressed=true]{border-color:#54724e;background:#eff4eb}.rect{border:1.5px solid currentColor;border-radius:2px;width:22px;height:13px;display:block;margin:5px}.vertical{height:22px;width:13px;margin:.5px}select{width:100%;font-size:15px}.export{background:#de582a;border:0;color:#fff;width:100%;margin-top:24px;font-weight:650;padding:14px}.status{font-size:14px;color:#536251;line-height:1.45;margin:10px 0 0}.status:empty{display:none}.dl{display:block;margin-top:12px;color:#38553b}.dl[hidden],button[hidden]{display:none}.cancel{width:100%;margin-top:8px}.stage.drag{outline:3px solid #db6436}.heading{display:flex;align-items:center;gap:8px}.led{width:7px;height:7px;border-radius:50%;background:#638466}button:hover:enabled,.upload:hover{filter:brightness(.96)}:focus-visible{outline:3px solid #d98938;outline-offset:2px}@media(max-width:860px){.workspace{grid-template-columns:1fr 265px}.settings{padding:16px}}@media(max-width:700px){.workspace{grid-template-columns:1fr}.top{margin:25px 0 17px}main{padding-bottom:24px}.tag{font-size:12px}.panehead{padding:14px}.info{margin-top:10px}.controls{padding:12px}.workspace{gap:12px}}
-.upload{position:relative}.upload input{position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:pointer}.upload:focus-within{outline:3px solid #d98938}.status{overflow-wrap:anywhere}.camera label{display:flex;justify-content:space-between;gap:8px;font-size:14px;font-weight:650}.camera output{color:#52694e;white-space:nowrap}.camera input{width:100%;accent-color:#587451;margin:9px 0 0}.camera label~label{margin-top:15px}.photoPanel{padding:18px 21px;margin-top:16px}.photoPanel h2{font-size:18px;margin:0}.photoPanel p{font-size:14px;line-height:1.5;color:#536251;margin:8px 0}.photoRow{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:8px}.photoRow button{font-size:14px}.photoRow button:first-child{min-width:0;text-align:left;overflow-wrap:anywhere}#canvas{cursor:crosshair}#photoDialog{max-width:94vw;border:0;border-radius:12px;padding:12px}#photoDialog::backdrop{background:#15221bcc}#photoImage canvas{display:block;max-width:85vw;max-height:74vh;object-fit:contain;width:auto;height:auto}#photoDialog form{text-align:right;margin-top:8px}.stage.portrait{aspect-ratio:1}.stage canvas{width:100%;height:auto}.stage.portrait canvas{width:56.25%}#canvas{cursor:grab;user-select:none}#canvas.dragging{cursor:grabbing}#recenter{font-size:14px;padding:5px 10px;margin-left:auto}#canvas{touch-action:none}.mapZoomTools{position:absolute;right:12px;top:50%;transform:translateY(-50%);display:grid;border-radius:14px;background:#fff;box-shadow:0 2px 10px #26352a35;overflow:hidden}.stage.portrait .mapZoomTools{right:calc(21.875% + 8px)}.mapZoomTools button{display:grid;place-items:center;width:44px;height:44px;padding:0;background:white;color:#454b47;border:0;border-radius:0;font:400 31px/1 system-ui}.mapZoomTools button+button{border-top:1px solid #eee}.mapZoomTools button:focus-visible{outline-offset:-3px}#levelReadout{font:12px/1.5 ui-monospace,monospace;color:#52604f;text-align:center;background:white}#drawRoute{margin-top:8px;width:100%}#drawTools button{padding:6px;cursor:pointer}canvas.drawing{cursor:crosshair}</style><header><div><div class="brand"><svg viewBox="0 0 24 24" fill="none" stroke="#f2f6e8" stroke-width="2"><path d="M2 17 8 6l5 9 3-6 6 10H3"/><circle cx="17" cy="5" r="1.5" fill="#ff975d" stroke="none"/></svg>Атлас поездки</div><div class="tag">GPX / Видео</div></div></header>
-<main><div class="top"><h1>Анимация маршрута</h1></div><div class="workspace"><section><div class="card"><div class="panehead"><h2 class="heading"><span class="led"></span>Предпросмотр</h2><button id="recenter" type="button" hidden>К маршруту</button><span class="meta" id="size">1920 × 1080</span></div><div class="stage" id="stage"><canvas id="canvas" width="1920" height="1080" aria-label="Карта маршрута"></canvas><div class="mapZoomTools" role="group" aria-label="Масштаб карты"><button id="zoomIn" type="button" aria-label="Приблизить карту" title="Приблизить карту">+</button><output id="levelReadout" aria-label="Уровень карты"></output><button id="zoomOut" type="button" aria-label="Отдалить карту" title="Отдалить карту">−</button></div></div><div class="controls"><button id="play" disabled aria-label="Воспроизвести">▶</button><input id="seek" disabled aria-label="Позиция воспроизведения" type="range" min="0" max="1000" value="0"><small id="clock">0:00 / 0:15</small></div></div>
+.upload{position:relative}.upload input{position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:pointer}.upload:focus-within{outline:3px solid #d98938}.status{overflow-wrap:anywhere}.camera label{display:flex;justify-content:space-between;gap:8px;font-size:14px;font-weight:650}.camera output{color:#52694e;white-space:nowrap}.camera input{width:100%;accent-color:#587451;margin:9px 0 0}.camera label~label{margin-top:15px}.photoPanel{padding:18px 21px;margin-top:16px}.photoPanel h2{font-size:18px;margin:0}.photoPanel p{font-size:14px;line-height:1.5;color:#536251;margin:8px 0}.photoRow{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:8px}.photoRow button{font-size:14px}.photoRow button:first-child{min-width:0;text-align:left;overflow-wrap:anywhere}#canvas{cursor:crosshair}#photoDialog{max-width:94vw;border:0;border-radius:12px;padding:12px}#photoDialog::backdrop{background:#15221bcc}#photoImage canvas{display:block;max-width:85vw;max-height:74vh;object-fit:contain;width:auto;height:auto}#photoDialog form{text-align:right;margin-top:8px}.stage.portrait{aspect-ratio:1}.stage canvas{width:100%;height:auto}.stage.portrait canvas{width:56.25%}#canvas{cursor:grab;user-select:none}#canvas.dragging{cursor:grabbing}#recenter{position:absolute;right:12px;top:8px;display:grid;place-items:center;width:44px;height:44px;padding:0;border:0;border-radius:14px;background:white;color:#454b47;box-shadow:0 2px 10px #26352a35}.stage.portrait #recenter{right:calc(21.875% + 8px)}@media(max-width:600px){#recenter,.stage.portrait #recenter{top:50%;right:auto;left:8px;transform:translateY(-50%)}.stage.portrait #recenter{left:calc(21.875% + 8px)}}#canvas{touch-action:none}.mapZoomTools{position:absolute;right:12px;top:50%;transform:translateY(-50%);display:grid;border-radius:14px;background:#fff;box-shadow:0 2px 10px #26352a35;overflow:hidden}.stage.portrait .mapZoomTools{right:calc(21.875% + 8px)}.mapZoomTools button{display:grid;place-items:center;width:44px;height:44px;padding:0;background:white;color:#454b47;border:0;border-radius:0;font:400 31px/1 system-ui}.mapZoomTools button+button{border-top:1px solid #eee}.mapZoomTools button:focus-visible{outline-offset:-3px}#levelReadout{font:12px/1.5 ui-monospace,monospace;color:#52604f;text-align:center;background:white}#drawRoute{margin-top:8px;width:100%}#drawTools button{padding:6px;cursor:pointer}canvas.drawing{cursor:crosshair}</style><header><div><div class="brand"><svg viewBox="0 0 24 24" fill="none" stroke="#f2f6e8" stroke-width="2"><path d="M2 17 8 6l5 9 3-6 6 10H3"/><circle cx="17" cy="5" r="1.5" fill="#ff975d" stroke="none"/></svg>Атлас поездки</div><button id="installApp" type="button" hidden>Установить</button><div class="tag">GPX / Видео</div></div></header>
+<main><div class="top"><h1>Анимация маршрута</h1></div><div class="workspace"><section><div class="card"><div class="panehead"><h2 class="heading"><span class="led"></span>Предпросмотр</h2><span class="meta" id="size">1920 × 1080</span></div><div class="stage" id="stage"><canvas id="canvas" width="1920" height="1080" aria-label="Карта маршрута"></canvas><button id="recenter" type="button" aria-label="Показать моё местоположение" title="Показать моё местоположение"><svg aria-hidden="true" viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><path d="M20.7 3.3a1 1 0 0 0-1.1-.2L3.8 10a1 1 0 0 0 .1 1.9l6.5 1.7 1.7 6.5a1 1 0 0 0 1.9.1l6.9-15.8a1 1 0 0 0-.2-1.1Z"/></svg></button><div class="mapZoomTools" role="group" aria-label="Масштаб карты"><button id="zoomIn" type="button" aria-label="Приблизить карту" title="Приблизить карту">+</button><output id="levelReadout" aria-label="Уровень карты"></output><button id="zoomOut" type="button" aria-label="Отдалить карту" title="Отдалить карту">−</button></div></div><p id="locationStatus" class="status" role="status" hidden></p><div class="controls"><button id="play" disabled aria-label="Воспроизвести">▶</button><input id="seek" disabled aria-label="Позиция воспроизведения" type="range" min="0" max="1000" value="0"><small id="clock">0:00 / 0:15</small></div></div>
 <div class="card info"><span class="routeicon"><svg width="25" height="25" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="5" cy="18" r="2"/><circle cx="19" cy="6" r="2"/><path d="M7 18h7a3 3 0 0 0 0-6h-4a3 3 0 0 1 0-6h7"/></svg></span><div><strong id="name">Обзорная карта</strong><small id="source">Загрузите GPX или нарисуйте маршрут на карте.</small></div><span class="km" id="distance"></span></div><div class="card photoPanel" id="photoPanel" hidden><h2>Фотографии на маршруте</h2><p>Дважды нажмите на место на треке и выберите фотографию. Двойной щелчок по метке открывает снимок.</p><input id="photoFile" hidden type="file" accept="image/*"><div id="photoList"></div><p id="photoStatus" class="status" role="status"></p></div></section>
 <aside class="card settings"><h2>Настройки видео</h2><div class="group"><span class="label">Трек поездки</span><label class="upload"><input id="file" type="file" accept=".gpx,application/gpx+xml,application/xml,text/xml" aria-label="Загрузить GPX"><span aria-hidden="true">＋</span> Загрузить GPX</label><button class="format" type="button" id="drawRoute">Нарисовать маршрут</button><div id="drawTools" hidden><p class="status">Ставьте точки кликом по карте. Для маршрута нужны хотя бы две точки.</p><div><button type="button" id="finishRoute">Готово</button> <button type="button" id="undoPoint">Убрать точку</button> <button type="button" id="cancelRoute">Отмена</button></div></div><p id="importStatus" role="status" class="status"></p></div><div class="group"><span class="label">Формат кадра</span><div class="formats"><button class="format" id="wide" aria-pressed="true"><i class="rect"></i>16:9</button><button class="format" id="tall" aria-pressed="false"><i class="rect vertical"></i>9:16</button></div></div><div class="group"><label class="label" for="basemap">Тип карты</label><select id="basemap"><option value="map">Обычная карта</option><option value="satellite">Спутник · Sentinel-2</option></select><p id="imageryCredit" class="status" hidden>Мозаика 2025 года. <a href="https://maps.eox.at/" target="_blank" rel="noopener">EOX Maps</a> · <a href="https://cloudless.eox.at/documentation/license" target="_blank" rel="noopener">Условия использования</a></p></div><p id="localCredit" class="status" hidden>Карта <a href="https://maps.eox.at/" target="_blank" rel="noopener">EOX Maps</a> · <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a></p><div class="group"><label class="label" for="direction">Ориентация камеры</label><select id="direction"><option value="flyover" selected>Облёт маршрута</option><option value="course">По ходу движения</option><option value="north">Север сверху</option></select></div><div class="group"><label class="label" for="zoomMode">Режим масштаба</label><select id="zoomMode"><option value="auto">Приближение на старте и финише</option><option value="fixed">Фиксированный зум</option></select></div><div class="group camera"><div id="endZoomGroup" style="margin-top:15px"><label for="endZoom">Приближение у старта и финиша <output id="endZoomValue">3×</output></label><input id="endZoom" type="range" min="1" max="6" step="0.1" value="3"></div></div><div class="group"><label class="label" for="duration">Длительность движения</label><select id="duration"><option value="5">5 секунд</option><option value="15" selected>15 секунд</option><option value="30">30 секунд</option><option value="60">60 секунд</option></select></div><div class="group"><label class="label" for="photoDuration">Время показа каждой фотографии</label><select id="photoDuration"><option value="0.5">0,5 секунды</option><option value="1" selected>1 секунда</option><option value="1.5">1,5 секунды</option><option value="2">2 секунды</option><option value="3">3 секунды</option><option value="5">5 секунд</option></select></div><button id="save" disabled class="export">Сохранить видео</button><button hidden id="cancel" class="cancel">Отменить запись</button><p id="status" role="status" class="status"></p><a hidden id="download" class="dl">Скачать видео ещё раз</a></aside></div></main><dialog id="photoDialog" aria-label="Просмотр фотографии"><div id="photoImage"></div><form method="dialog"><button autofocus>Закрыть</button></form></dialog><script>
 (() => {
@@ -444,7 +447,7 @@
         ctx.translate(aim.x,aim.y);
         ctx.scale(magnification,magnification);
         ctx.translate(-centerX,-centerY);
-      } else if (options.follow) {
+      } else if (options.follow && animateCamera) {
         const table = headingsFor(duration);
         const at = Math.min(table.length-1, Math.max(0, progress*(table.length-1)));
         const i = Math.floor(at), t = at-i;
@@ -513,6 +516,19 @@
       ctx.restore();
     }
     return {draw, waitForTiles, dispose,baseLevel,maxLevel,get level(){return currentLevel;},
+      pointFor(location){
+        const p=project(location);
+        return new DOMPoint((p.x-left)*scale,(p.y-top)*scale);
+      },
+      routeView(draft){
+        let x0=Infinity,x1=-Infinity,y0=Infinity,y1=-Infinity;
+        for(const {x,y} of draft ?? points){
+          x0=Math.min(x0,x);x1=Math.max(x1,x);
+          y0=Math.min(y0,y);y1=Math.max(y1,y);
+        }
+        const fit=Math.min(frameW*.80/(x1-x0),frameH*.78/(y1-y0));
+        return {world:new DOMPoint((x0+x1)/2,(y0+y1)/2),level:Number.isFinite(fit)?baseLevel+Math.log2(fit):currentLevel};
+      },
       locationOf:({x,y})=>({
         lon:((left+x/scale)*360%360+360)%360-180,
         lat:Math.atan(Math.sinh(Math.PI*(1-2*Math.max(0,Math.min(1,top+y/scale)))))/RAD
@@ -2694,9 +2710,41 @@ function canvasPoint(event){
 let panX=0, panY=0, drag=null, suppressClick=false;
 function resetPan(){
   panX=0;panY=0;
-  el('recenter').hidden=true;
 }
-el('recenter').onclick=()=>{resetPan();display(progress);};
+const locationStatus=el('locationStatus');
+let centerRequest=0;
+function updateCenterButton(){
+  const label=(draft ? draft.length : trip) ? 'Показать маршрут целиком' : 'Показать моё местоположение';
+  el('recenter').title=label;
+  el('recenter').setAttribute('aria-label',label);
+}
+function centerView(world,level){
+  resetPan();fitTrack=true;
+  previewLevel=Math.max(0,Math.min(map.maxLevel,level));
+  display(progress,{x:canvas.width/2,y:canvas.height/2,world,shift(dx,dy){panX+=dx;panY+=dy;}});
+}
+el('recenter').onclick=()=>{
+  if(!map || busy) return;
+  const request=++centerRequest, currentMap=map, currentDraft=draft;
+  stop();
+  locationStatus.hidden=true;
+  if(draft ? draft.length : trip){
+    const {world,level}=map.routeView(draft);
+    centerView(world,level);
+    return;
+  }
+  const finish=(position)=>{
+    if(request!==centerRequest || busy || map!==currentMap || draft!==currentDraft || draft?.length) return;
+    const location=position ? {lat:position.coords.latitude,lon:position.coords.longitude} : {lat:55.7558,lon:37.6173};
+    centerView(map.pointFor(location),position ? map.level : 3);
+    locationStatus.textContent=position ? '' : 'Геопозиция недоступна. Карта центрирована по Москве.';
+    locationStatus.hidden=!!position;
+  };
+  if(!navigator.geolocation){finish(null);return;}
+  locationStatus.textContent='Определяем местоположение…';
+  locationStatus.hidden=false;
+  navigator.geolocation.getCurrentPosition(finish,()=>finish(null),{timeout:10000,maximumAge:60000});
+};
 let selectedLevel=null, previewLevel=null;
 function zoomLimits(){
   el('zoomIn').disabled=busy || !map || map.level>=map.maxLevel-1e-6;
@@ -2713,7 +2761,6 @@ function setMapZoom(value,point,world){
   clearDownload();
   display(progress,{...point,world,shift(dx,dy){
     panX+=dx;panY+=dy;
-    el('recenter').hidden=Math.abs(panX)+Math.abs(panY)<.1;
   }});
   zoomLimits();
 }
@@ -2748,17 +2795,23 @@ function startPinch(){
   pinch={distance:Math.max(1,distance),zoom:map.level,world:map.worldAt(center.x,center.y)};
   suppressClick=true;stop();
 }
+function beginPan(id,x,y){
+  drag={id,x,y,panX,panY,moved:false};
+}
 canvas.onpointerdown=event=>{
   if(event.pointerType==='touch' && !busy && map){
     if(!touches.size) suppressClick=false;
-    touches.set(event.pointerId,{x:event.clientX,y:event.clientY,startX:event.clientX,startY:event.clientY});
+    touches.set(event.pointerId,{x:event.clientX,y:event.clientY});
     canvas.setPointerCapture(event.pointerId);
-    if(touches.size===2) startPinch();
+    if(touches.size===1) beginPan(event.pointerId,event.clientX,event.clientY);
+    if(touches.size===2){
+      drag=null;canvas.classList.remove('dragging');startPinch();
+    }
     return;
   }
   if(event.pointerType!=='mouse' || event.button!==0 || busy || !map) return;
   suppressClick=false;
-  drag={id:event.pointerId,x:event.clientX,y:event.clientY,panX,panY,moved:false};
+  beginPan(event.pointerId,event.clientX,event.clientY);
   canvas.setPointerCapture(event.pointerId);
 };
 function movePan(event){
@@ -2770,14 +2823,13 @@ function movePan(event){
   const rect=canvas.getBoundingClientRect();
   const scale=Math.min(rect.width/canvas.width,rect.height/canvas.height);
   panX=drag.panX+dx/scale;panY=drag.panY+dy/scale;
-  el('recenter').hidden=!(panX || panY);
   display(progress);
 }
 canvas.onpointermove=event=>{
   const touch=touches.get(event.pointerId);
   if(touch){
     touch.x=event.clientX;touch.y=event.clientY;
-    if(Math.hypot(touch.x-touch.startX,touch.y-touch.startY)>5) suppressClick=true;
+    if(!busy && drag?.id===event.pointerId) movePan(event);
     if(pinch && !busy){
       const {center,distance}=touchPair();
       setMapZoom(pinch.zoom+Math.log2(Math.max(1,distance)/pinch.distance),center,pinch.world);
@@ -2788,8 +2840,12 @@ canvas.onpointermove=event=>{
 };
 function endDrag(event){
   if(touches.delete(event.pointerId)){
-    pinch=null;
-    if(touches.size>=2 && map && !busy) startPinch();
+    if(!busy && drag?.id===event.pointerId && event.type==='pointerup') movePan(event);
+    pinch=null;drag=null;canvas.classList.remove('dragging');
+    if(touches.size===1){
+      const [[id,point]]=touches;
+      beginPan(id,point.x,point.y);
+    }else if(touches.size>=2 && map && !busy) startPinch();
     return;
   }
   if(drag?.id!==event.pointerId) return;
@@ -2799,6 +2855,7 @@ function endDrag(event){
 }
 canvas.onpointerup=canvas.onpointercancel=canvas.onlostpointercapture=endDrag;
 function refreshDrawing(){
+  centerRequest++;locationStatus.hidden=true;updateCenterButton();
   const drawing=draft!==null;
   el('drawRoute').hidden=drawing;
   el('drawTools').hidden=!drawing;
@@ -2891,6 +2948,7 @@ function clearDownload(){
   lastUrl='';
 }
 async function prepare(nextTrip, vertical, initial, autoplay=false) {
+  centerRequest++;locationStatus.hidden=true;
   stop(); lock(true); el('status').textContent='';
   try {
     const w=vertical?1080:1920, h=vertical?1920:1080;
@@ -2912,7 +2970,7 @@ async function prepare(nextTrip, vertical, initial, autoplay=false) {
     el('size').textContent=w+' × '+h;
     el('name').textContent=trip?.name ?? 'Обзорная карта';
     el('source').textContent=trip?.source ?? 'Загрузите GPX или нарисуйте маршрут на карте.';
-    el('recenter').textContent=trip?'К маршруту':'К Москве';
+    updateCenterButton();
     el('photoPanel').hidden=!trip;
     el('distance').textContent=trip ? map.distanceKm.toLocaleString('ru-RU',{maximumFractionDigits:1})+' км' : '';
     clearDownload(); display(initial);
@@ -3032,4 +3090,18 @@ el('save').onclick=async()=>{
 };
 prepare(trip,false,progress);
 
+</script><script>
+if (location.protocol !== 'file:' && window.isSecureContext && 'serviceWorker' in navigator) {
+  const button = document.getElementById('installApp');
+  window.addEventListener('beforeinstallprompt', event => {
+    event.preventDefault();
+    button.hidden = false;
+    button.onclick = async () => {
+      button.hidden = true;
+      await event.prompt();
+    };
+  });
+  window.addEventListener('appinstalled', () => { button.hidden = true; });
+  navigator.serviceWorker.register('./sw.js').catch(console.warn);
+}
 </script></html>
