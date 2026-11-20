@@ -25,7 +25,35 @@ function timeline(p){
   const at=flyover()?Math.min(1,Math.max(0,(phase-depart)/(arrive-depart))):phase;
   return {at,phase};
 }
+const mobileMenu=el('mobileMenu');
+const narrowScreen=matchMedia('(max-width:700px)');
+const menuItems=[
+  document.querySelector('.controls'), document.querySelector('.settings'),
+  el('photoPanel'), el('installApp')
+].map(item=>{
+  const home=document.createComment('menu item');
+  item.before(home);
+  return {item,home};
+});
+function closeMobileMenu(){
+  if(mobileMenu.open) mobileMenu.close();
+}
+function placeMenuItems(){
+  closeMobileMenu();
+  for(const {item,home} of menuItems){
+    if(narrowScreen.matches) el('menuControls').append(item);
+    else home.after(item);
+  }
+}
+el('openMenu').onclick=()=>{
+  mobileMenu.showModal();
+  mobileMenu.scrollTop=0;
+};
+narrowScreen.addEventListener('change',placeMenuItems);
+placeMenuItems();
+
 function locatePhoto(photo){
+  closeMobileMenu();
   const index=photos.indexOf(photo);
   const middle=cameraTime(photo.at)*travelSeconds()+(index+.5)*photoSeconds();
   stop();display(middle/seconds());
@@ -238,10 +266,11 @@ function refreshDrawing(){
   lock(false);
   display(progress);
 }
-el('drawRoute').onclick=()=>{stop();draft=[];refreshDrawing();};
+el('drawRoute').onclick=()=>{closeMobileMenu();stop();draft=[];refreshDrawing();};
 el('undoPoint').onclick=()=>{draft.pop();refreshDrawing();};
 el('cancelRoute').onclick=()=>{draft=null;refreshDrawing();};
 el('finishRoute').onclick=()=>{
+  closeMobileMenu();
   const segments=[draft.map(map.locationOf)];
   draft=null;
   refreshDrawing();
@@ -397,6 +426,7 @@ async function importFile(file){
     });
     const next=parseGPX(xml,file.name);
     await prepare(next,portrait,0);
+    if(trip===next) closeMobileMenu();
   }
   catch(e){el('importStatus').textContent=file.name+' — '+e.message;}finally{lock(false);el('file').value='';}
 }
@@ -439,7 +469,7 @@ function togglePlay(){
   function tick(t){const p=Math.min(1,Math.max(0,(t-start)/(seconds()*1000)));display(p);if(p<1) animation=requestAnimationFrame(tick);else stop();}
   animation=requestAnimationFrame(tick);
 }
-el('play').onclick=togglePlay;
+el('play').onclick=()=>{closeMobileMenu();togglePlay();};
 el('cancel').onclick=()=>recording?.abort();
 el('save').onclick=async()=>{
   if(!trip||!map||busy) return;
