@@ -338,24 +338,31 @@ canvas.ondblclick=event=>{
 };
 el('photoDialog').onclose=()=>el('photoImage').replaceChildren();
 el('appendMedia').onclick=()=>{el('photoDialog').close();el('photoFile').click();};
+el('mediaLoading').oncancel=event=>event.preventDefault();
 el('autoMedia').onchange=el('photoFile').onchange=async event=>{
   const files=Array.from(event.target.files), auto=event.target.id==='autoMedia';
   event.target.value='';
   if(!files.length || !trip || busy || (!auto && !photoAnchor)) return;
   stop();lock(true);
   const skipped=[];
+  const loader=el('mediaLoading'), progressBar=el('mediaProgress');
+  progressBar.max=files.length;
+  progressBar.value=0;
   try{
-    for(const file of files){
+    loader.showModal();
+    for(const [index,file] of files.entries()){
+      el('mediaLoadingFile').textContent='Файл '+(index+1)+' из '+files.length+' · '+file.name;
       try{
         const anchor=auto ? map.mediaAnchor(await mediaTags(file)) : photoAnchor;
         if(!anchor) throw Error();
         photos.push({...anchor,...await loadMedia(file),name:file.name});
       }catch{skipped.push(file.name);}
+      progressBar.value=index+1;
     }
     photos.sort((a,b)=>a.at-b.at);
     clearDownload();updatePhotoList();display(0);
     el('photoStatus').textContent='Добавлено: '+(files.length-skipped.length)+'. '+(skipped.length?'Пропущены (нет привязки или формат недоступен): '+skipped.join(', '):'');
-  }finally{lock(false);photoAnchor=null;}
+  }finally{loader.close();lock(false);photoAnchor=null;}
 };
 function lock(value) { busy=value; controls.forEach(id=>{el(id).disabled=value || (draft!==null && id!=='recenter') || (!trip && ['save','play','seek'].includes(id));}); zoomLimits(); }
 function visibleFrameHeight(){
