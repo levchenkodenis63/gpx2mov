@@ -354,14 +354,14 @@ el('autoMedia').onchange=el('photoFile').onchange=async event=>{
       el('mediaLoadingFile').textContent='Файл '+(index+1)+' из '+files.length+' · '+file.name;
       try{
         const anchor=auto ? map.mediaAnchor(await mediaTags(file)) : photoAnchor;
-        if(!anchor) throw Error();
+        if(!anchor) throw Error('Нет привязки к маршруту');
         photos.push({...anchor,...await loadMedia(file),name:file.name});
-      }catch{skipped.push(file.name);}
+      }catch(error){skipped.push(file.name+' — '+(error?.message || 'Не удалось прочитать файл'));}
       progressBar.value=index+1;
     }
     photos.sort((a,b)=>a.at-b.at);
     clearDownload();updatePhotoList();display(0);
-    el('photoStatus').textContent='Добавлено: '+(files.length-skipped.length)+'. '+(skipped.length?'Пропущены (нет привязки или формат недоступен): '+skipped.join(', '):'');
+    el('photoStatus').textContent='Добавлено: '+(files.length-skipped.length)+'. '+(skipped.length?'Пропущены: '+skipped.join(', '):'');
   }finally{loader.close();lock(false);photoAnchor=null;}
 };
 function lock(value) { busy=value; controls.forEach(id=>{el(id).disabled=value || (draft!==null && id!=='recenter') || (!trip && ['save','play','seek'].includes(id));}); zoomLimits(); }

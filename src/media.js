@@ -35,7 +35,14 @@ async function clipTags(file){
   return {};
 }
 async function mediaTags(file){
-  if(isClip(file)) return clipTags(file);
+  if(isClip(file)){
+    let timer;
+    try{
+      return await Promise.race([clipTags(file),new Promise((_,reject)=>{
+        timer=setTimeout(()=>reject(Error('Истекло время чтения метаданных видео')),30000);
+      })]);
+    }finally{clearTimeout(timer);}
+  }
   const tags=await exifr.parse(file,{reviveValues:false}) || {};
   const date=String(tags.DateTimeOriginal || '').match(/^(\d{4}):(\d{2}):(\d{2}) (\d{2}:\d{2}:\d{2})/);
   const offset=/^[+-]\d{2}:\d{2}$/.test(tags.OffsetTimeOriginal)?tags.OffsetTimeOriginal:'';
@@ -48,8 +55,24 @@ async function loadMedia(file){
     if(isClip(file)){
       const video=document.createElement('video');
       video.muted=true;video.playsInline=true;video.preload='auto';
-      await new Promise((resolve,reject)=>{video.onloadeddata=resolve;video.onerror=reject;video.src=url;});
-      if(!Number.isFinite(video.duration)||video.duration<=0) throw Error();
+      try{
+        // Import only needs the video track and duration. Mobile browsers can
+        // defer the first decoded frame until playback starts.
+        await new Promise((resolve,reject)=>{
+          const timer=setTimeout(()=>reject(Error('Браузер не прочитал видео за 30 секунд')),30000);
+          video.onloadedmetadata=()=>{
+            clearTimeout(timer);
+            if(video.videoWidth && Number.isFinite(video.duration) && video.duration>0) resolve();
+            else reject(Error('Не удалось определить параметры видео'));
+          };
+          video.onerror=()=>{clearTimeout(timer);reject(Error('Браузер не смог открыть видео'));};
+          video.src=url;
+          video.load();
+        });
+      }catch(error){
+        video.removeAttribute('src');video.load();
+        throw error;
+      }finally{video.onloadedmetadata=video.onerror=null;}
       return {bitmap:video,duration:video.duration,url};
     }
     const image=new Image();image.src=url;await image.decode();
@@ -61,7 +84,7 @@ async function loadMedia(file){
   }catch(error){URL.revokeObjectURL(url);throw error;}
 }
 async function seekClip(video,time){
-  if(!video.seeking && Math.abs(video.currentTime-time)<.001) return;
+  if(!video.seeking && video.readyState>=2 && Math.abs(video.currentTime-time)<.001) return;
   await new Promise((resolve,reject)=>{
     const done=()=>{clearTimeout(timer);video.removeEventListener('seeked',done);resolve();};
     const timer=setTimeout(()=>{video.removeEventListener('seeked',done);reject(Error('Не удалось прочитать кадр видео.'));},8000);
