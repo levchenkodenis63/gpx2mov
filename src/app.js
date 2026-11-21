@@ -3,13 +3,16 @@ const el = id => document.getElementById(id);
 const canvas = el('canvas');
 let trip=null;
 let map, portrait=false, progress=0, animation=0, busy=false, recording=null, lastUrl='';
-const controls=['drawRoute','file','wide','tall','duration','photoDuration','basemap','direction','zoomMode','endZoom','save','play','seek','recenter'];
+const controls=['autoMedia','drawRoute','file','wide','tall','duration','photoDuration','basemap','direction','zoomMode','endZoom','save','play','seek','recenter'];
 let draft=null;
 const photos=[];
 let fitTrack=false;
 const photoSeconds=()=>Number(el('photoDuration').value);
 const travelSeconds=()=>Number(el('duration').value);
-const seconds=()=>travelSeconds()+photos.length*photoSeconds();
+const hold=item=>item.duration || photoSeconds();
+const seconds=()=>photos.reduce((sum,item)=>sum+hold(item),travelSeconds());
+let playingClip=null;
+function pauseClip(){playingClip?.pause();playingClip=null;}
 const flyover=()=>el('direction').value==='flyover';
 const depart=.12, arrive=.76;
 function cameraTime(at){return flyover()?depart+(arrive-depart)*at:at;}
@@ -18,8 +21,8 @@ function timeline(p){
   for(const photo of photos){
     const arrival=cameraTime(photo.at)*travelSeconds();
     if(elapsed<arrival) break;
-    if(elapsed<arrival+photoSeconds()) return {at:photo.at,phase:cameraTime(photo.at),photo};
-    elapsed-=photoSeconds();
+    if(elapsed<arrival+hold(photo)) return {at:photo.at,phase:cameraTime(photo.at),photo,offset:elapsed-arrival};
+    elapsed-=hold(photo);
   }
   const phase=Math.min(1,Math.max(0,elapsed/travelSeconds()));
   const at=flyover()?Math.min(1,Math.max(0,(phase-depart)/(arrive-depart))):phase;
@@ -29,7 +32,7 @@ const mobileMenu=el('mobileMenu');
 const narrowScreen=matchMedia('(max-width:700px)');
 const menuItems=[
   document.querySelector('.settings'),
-  el('photoPanel'), el('installApp'), el('routeInputs')
+  el('installApp'), el('routeInputs')
 ].map(item=>{
   const home=document.createComment('menu item');
   item.before(home);
@@ -57,23 +60,47 @@ placeMenuItems();
 function locatePhoto(photo){
   closeMobileMenu();
   const index=photos.indexOf(photo);
-  const middle=cameraTime(photo.at)*travelSeconds()+(index+.5)*photoSeconds();
+  const middle=cameraTime(photo.at)*travelSeconds()+photos.slice(0,index).reduce((sum,item)=>sum+hold(item),hold(photo)/2);
   stop();display(middle/seconds());
 }
 function updatePhotoList(){
   const list=el('photoList');
   list.replaceChildren();
+  el('mediaTable').hidden=!photos.length;
   for(const photo of photos){
-    const row=document.createElement('div');row.className='photoRow';
+    const row=list.insertRow();
     const show=document.createElement('button'), remove=document.createElement('button');
-    show.textContent=(photo.at*map.distanceKm).toLocaleString('ru-RU',{maximumFractionDigits:2})+' км · '+photo.name;
+    show.textContent=photo.name;
+    const km=document.createElement('input');
+    km.inputMode='decimal';
+    km.setAttribute('aria-label','Километр от старта для '+photo.name);
+    const format=value=>value.toLocaleString('ru-RU',{maximumFractionDigits:3,useGrouping:false});
+    km.value=format(photo.at*map.distanceKm);
+    km.onkeydown=event=>{
+      if(event.key==='Escape') km.value=format(photo.at*map.distanceKm);
+      if(event.key==='Enter' || event.key==='Escape') km.blur();
+    };
+    km.onchange=()=>{
+      const value=km.value.trim().replace(',','.');
+      const distance=Number(value);
+      if(busy){km.value=format(photo.at*map.distanceKm);return;}
+      if(!/^(?:\d+(?:\.\d*)?|\.\d+)$/.test(value) || distance>Math.ceil(map.distanceKm*1000)/1000){
+        el('photoStatus').textContent='Введите расстояние от 0 до '+format(map.distanceKm)+' км.';
+        km.value=format(photo.at*map.distanceKm);
+        return;
+      }
+      Object.assign(photo,map.anchorAtKm(Math.min(distance,map.distanceKm)));
+      photos.sort((a,b)=>a.at-b.at);
+      clearDownload();updatePhotoList();locatePhoto(photo);
+      el('photoStatus').textContent=photo.name+' — '+format(photo.at*map.distanceKm)+' км';
+    };
     show.onclick=()=>{if(!busy) locatePhoto(photo);};
     remove.textContent='Удалить';remove.setAttribute('aria-label','Удалить '+photo.name);
     remove.onclick=()=>{
       if(busy) return;
-      stop();photos.splice(photos.indexOf(photo),1);updatePhotoList();clearDownload();display(progress);
+      stop();photos.splice(photos.indexOf(photo),1);if(photo.url) URL.revokeObjectURL(photo.url);updatePhotoList();clearDownload();display(progress);
     };
-    row.append(show,remove);list.append(row);
+    for(const control of [show,km,remove]) row.insertCell().append(control);
   }
 }
 let photoAnchor;
@@ -293,7 +320,13 @@ function activatePhoto(event){
   const photo=map.photoAt(photos,x,y,radius);
   stop();
   if(photo){
-    el('photoImage').replaceChildren(photo.bitmap);
+    photoAnchor={at:photo.at,index:photo.index,t:photo.t};
+    const group=photos.filter(item=>item.at===photo.at);
+    el('photoImage').replaceChildren(...group.map(item=>{
+      if(!item.duration) return item.bitmap;
+      const player=document.createElement('video');player.src=item.url;player.controls=true;player.playsInline=true;
+      return player;
+    }));
     el('photoDialog').showModal();
   }else{
     photoAnchor=map.nearestPhotoPoint(x,y);
@@ -303,44 +336,47 @@ function activatePhoto(event){
 canvas.ondblclick=event=>{
   if(lastPointerType!=='touch') activatePhoto(event);
 };
-el('photoFile').onchange=async event=>{
-  const file=event.target.files[0];
+el('photoDialog').onclose=()=>el('photoImage').replaceChildren();
+el('appendMedia').onclick=()=>{el('photoDialog').close();el('photoFile').click();};
+el('autoMedia').onchange=el('photoFile').onchange=async event=>{
+  const files=Array.from(event.target.files), auto=event.target.id==='autoMedia';
   event.target.value='';
-  if(!file||!photoAnchor||busy) return;
-  lock(true);
-  const url=URL.createObjectURL(file);
+  if(!files.length || !trip || busy || (!auto && !photoAnchor)) return;
+  stop();lock(true);
+  const skipped=[];
   try{
-    const image=new Image();image.src=url;await image.decode();
-    const ratio=Math.min(1,1920/Math.max(image.naturalWidth,image.naturalHeight));
-    const bitmap=document.createElement('canvas');
-    bitmap.width=Math.max(1,Math.round(image.naturalWidth*ratio));
-    bitmap.height=Math.max(1,Math.round(image.naturalHeight*ratio));
-    bitmap.getContext('2d').drawImage(image,0,0,bitmap.width,bitmap.height);
-    const photo={...photoAnchor,bitmap,name:file.name};
-    const {at:routeAt,phase}=timeline(progress);
-    photos.push(photo);photos.sort((a,b)=>a.at-b.at);
-    clearDownload();updatePhotoList();
-    const holdsBefore=photos.filter(item=>item.at<routeAt).length;
-    display((phase*travelSeconds()+holdsBefore*photoSeconds())/seconds());
-    el('photoStatus').textContent='';
-  }catch{el('photoStatus').textContent='Не удалось прочитать снимок. Попробуйте JPEG, PNG или WebP.';}
-  finally{URL.revokeObjectURL(url);lock(false);photoAnchor=null;}
+    for(const file of files){
+      try{
+        const anchor=auto ? map.mediaAnchor(await mediaTags(file)) : photoAnchor;
+        if(!anchor) throw Error();
+        photos.push({...anchor,...await loadMedia(file),name:file.name});
+      }catch{skipped.push(file.name);}
+    }
+    photos.sort((a,b)=>a.at-b.at);
+    clearDownload();updatePhotoList();display(0);
+    el('photoStatus').textContent='Добавлено: '+(files.length-skipped.length)+'. '+(skipped.length?'Пропущены (нет привязки или формат недоступен): '+skipped.join(', '):'');
+  }finally{lock(false);photoAnchor=null;}
 };
 function lock(value) { busy=value; controls.forEach(id=>{el(id).disabled=value || (draft!==null && id!=='recenter') || (!trip && ['save','play','seek'].includes(id));}); zoomLimits(); }
 function visibleFrameHeight(){
   return portrait && narrowScreen.matches && !recording ? canvas.width*5/4 : canvas.height;
 }
-function display(p,focus=null) {
+function display(p,focus=null,exact=false) {
   progress=p;
   const frame=timeline(p);
   const previewHeight=visibleFrameHeight();
   const crop=(canvas.height-previewHeight)/2;
   map.draw(canvas,frame.at,fitTrack || selectedLevel===null ? 1 : 2**(selectedLevel-map.baseLevel),!trip || fitTrack || el('zoomMode').value==='fixed' ? 1 : Number(el('endZoom').value),travelSeconds(),draft ? [] : photos,recording ? 0 : panX,recording ? 0 : panY,frame.phase,!fitTrack,el('zoomMode').value==='fixed',focus,recording ? null : previewLevel,draft,crop);
   zoomLimits();
+  const clip=frame.photo?.duration && (animation || recording) ? frame.photo.bitmap : null;
+  if(playingClip && playingClip!==clip) pauseClip();
+  if(clip && !exact && playingClip!==clip){
+    playingClip=clip;clip.currentTime=frame.offset;clip.play().catch(()=>{});
+  }
   if(frame.photo && (animation || recording)){
     const ctx=canvas.getContext('2d'), img=frame.photo.bitmap;
-    const scale=Math.min(canvas.width*.83/img.width,previewHeight*.75/img.height);
-    const w=img.width*scale,h=img.height*scale,x=(canvas.width-w)/2,y=(canvas.height-h)/2;
+    const scale=Math.min(canvas.width*.83/(img.videoWidth||img.width),previewHeight*.75/(img.videoHeight||img.height));
+    const w=(img.videoWidth||img.width)*scale,h=(img.videoHeight||img.height)*scale,x=(canvas.width-w)/2,y=(canvas.height-h)/2;
     ctx.save();ctx.shadowColor='#0008';ctx.shadowBlur=18;ctx.fillStyle='white';
     ctx.fillRect(x-5,y-5,w+10,h+10);ctx.shadowBlur=0;
     ctx.drawImage(img,x,y,w,h);ctx.restore();
@@ -350,6 +386,7 @@ function display(p,focus=null) {
   el('clock').textContent=!trip ? '0:00' : time(p*seconds())+' / '+time(seconds())+(seconds()%1?',5':'');
 }
 function stop() {
+  pauseClip();
   cancelAnimationFrame(animation); animation=0;
   el('play').textContent='▶'; el('play').ariaLabel='Воспроизвести';
 }
@@ -369,7 +406,7 @@ async function prepare(nextTrip, vertical, initial, autoplay=false) {
     el('imageryCredit').hidden=!satellite;
     el('localCredit').hidden=satellite || location.protocol!=='file:';
     if(trip!==nextTrip){
-      resetPan();selectedLevel=previewLevel=null;fitTrack=true;photos.length=0;photoAnchor=null;updatePhotoList();el('photoStatus').textContent='';
+      resetPan();selectedLevel=previewLevel=null;fitTrack=true;for(const item of photos) if(item.url) URL.revokeObjectURL(item.url);photos.length=0;photoAnchor=null;updatePhotoList();el('photoStatus').textContent='';
     }
     if(selectedLevel!==null) selectedLevel=Math.min(next.maxLevel,selectedLevel);
     if(previewLevel!==null) previewLevel=Math.min(next.maxLevel,previewLevel);
@@ -408,7 +445,7 @@ function parseGPX(xml, filename){
         if(child.localName!==point) continue;
         const coords=['lat','lon'].map(k=>child.getAttribute(k)?.trim());
         const [lat,lon]=coords.map(Number);
-        if(coords.every(Boolean)&&Number.isFinite(lat)&&Number.isFinite(lon)&&Math.abs(lat)<=90&&Math.abs(lon)<=180) path.push({lat,lon});
+        if(coords.every(Boolean)&&Number.isFinite(lat)&&Number.isFinite(lon)&&Math.abs(lat)<=90&&Math.abs(lon)<=180) path.push({lat,lon,time:Date.parse(child.getElementsByTagNameNS('*','time')[0]?.textContent)});
         else flush();
       }
       flush();
@@ -490,7 +527,14 @@ el('save').onclick=async()=>{
     if(recording.signal.aborted) throw new DOMException("Отменено","AbortError");
     const loaded=map.loaded;
     if(el('basemap').value==='satellite' && !loaded) throw Error('Снимки недоступны. Переключите тип карты и повторите экспорт.');
-    const {blob,extension}=await recordTrip(canvas,seconds(),display,p=>{
+    const {blob,extension}=await recordTrip(canvas,seconds(),(p,exact)=>{
+      const frame=timeline(p);
+      if(exact && frame.photo?.duration){
+        pauseClip();
+        return seekClip(frame.photo.bitmap,frame.offset).then(()=>display(p,null,true));
+      }
+      display(p,null,exact);
+    },p=>{
       const status='Экспорт '+Math.round(100*p)+' %. Оставьте вкладку открытой.';
       if(el('status').textContent!==status) el('status').textContent=status;
     },recording.signal,()=>map.loading ? map.waitForTiles() : null);
@@ -498,6 +542,6 @@ el('save').onclick=async()=>{
     const link=el('download');link.href=lastUrl;link.download=trip.name.replace(/[^\p{L}\d _.-]/gu,'_')+'.'+extension;
     link.hidden=false;link.click();el('status').textContent='Видео готово · '+extension.toUpperCase();
   }catch(e){el('status').textContent=e.name==='AbortError'?'Запись отменена.':e.message;}
-  finally{fitTrack=restoreFit;recording=null;el('cancel').hidden=true;lock(false);display(restore);}
+  finally{pauseClip();fitTrack=restoreFit;recording=null;el('cancel').hidden=true;lock(false);display(restore);}
 };
 prepare(trip,narrowScreen.matches,progress);

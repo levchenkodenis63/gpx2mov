@@ -148,12 +148,12 @@ window.recordTrip = async function(canvas, durationSeconds, draw, onProgress, si
     for (let i=0; i<frameCount; i++) {
       check();
       const progress = i === frameCount-1 ? 1 : i/frameCount;
-      draw(progress);
+      await draw(progress,true);
       const pending = pendingTiles?.();
       if (pending) {
         await pending;
         check();
-        draw(progress);
+        await draw(progress,true);
       }
       const frame = new VideoFrame(canvas, {timestamp:timestamp(i), duration:timestamp(i+1)-timestamp(i)});
       try { encoder.encode(frame, {keyFrame:i%(2*fps)===0}); }

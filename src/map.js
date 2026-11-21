@@ -75,7 +75,7 @@
         const p = project(location, near);
         near = p.x;
         if (previous) total += kilometres(previous, location);
-        points.push({ ...p, km: total, start: !previous });
+        points.push({ ...p, time:location.time, km: total, start: !previous });
         minX = Math.min(minX, p.x);
         maxX = Math.max(maxX, p.x);
         minY = Math.min(minY, p.y);
@@ -365,13 +365,20 @@
     }
     function nearestPhotoPoint(pixelX,pixelY) {
       const target = unprojectFrame(pixelX,pixelY).matrixTransform(transform.inverse());
+      return nearestAnchor(target);
+    }
+    function nearestAnchor(target,time){
       let best = Infinity, anchor;
       for (let i=1;i<points.length;i++) {
         const a=points[i-1], b=points[i];
         if (b.start) continue;
         const dx=b.x-a.x, dy=b.y-a.y, len=dx*dx+dy*dy;
-        const t=len ? Math.max(0,Math.min(1,((target.x-a.x)*dx+(target.y-a.y)*dy)/len)) : 0;
-        const error=(a.x+t*dx-target.x)**2+(a.y+t*dy-target.y)**2;
+        const timed=Number.isFinite(time) && b.time>a.time && time>=a.time && time<=b.time;
+        if(!target && !timed) continue;
+        const t=!target ? (time-a.time)/(b.time-a.time) : len ? Math.max(0,Math.min(1,((target.x-a.x)*dx+(target.y-a.y)*dy)/len)) : 0;
+        const distance=target ? Math.hypot(a.x+t*dx-target.x,a.y+t*dy-target.y) : 0;
+        const error=distance+(target && Number.isFinite(time) && Number.isFinite(a.time) && Number.isFinite(b.time)
+          ? Math.min(300,Math.abs(time-(a.time+t*(b.time-a.time)))/1000)*scale/40075000 : 0);
         if (error < best) {
           best=error;
           anchor={index:i,t,at:total ? (a.km+t*(b.km-a.km))/total : 0};
@@ -507,6 +514,26 @@
       ctx.restore();
     }
     return {draw, waitForTiles, dispose,baseLevel,maxLevel,get level(){return currentLevel;},
+      anchorAtKm(km){
+        // A segment start has no incoming edge, including after a GPX gap.
+        for(let i=1;i<points.length;i++){
+          const a=points[i-1], b=points[i];
+          if(b.start || b.km<km) continue;
+          const t=b.km>a.km ? (km-a.km)/(b.km-a.km) : 0;
+          return {index:i,t,at:total ? km/total : 0};
+        }
+      },
+      mediaAnchor(tags){
+        const gps=Number.isFinite(tags.lat)&&Math.abs(tags.lat)<=90&&Number.isFinite(tags.lon)&&Math.abs(tags.lon)<=180;
+        if(!gps) return nearestAnchor(null,tags.time);
+        const p=project(tags,(left+width/(2*scale)));
+        const target={x:(p.x-left)*scale,y:(p.y-top)*scale};
+        const anchor=nearestAnchor(target,tags.time);
+        if(!anchor) return;
+        const place=photoPosition(anchor);
+        const metres=Math.hypot(place.x-target.x,place.y-target.y)*40075000*Math.cos(tags.lat*RAD)/scale;
+        return metres<=1000 ? anchor : undefined;
+      },
       pointFor(location){
         const p=project(location);
         return new DOMPoint((p.x-left)*scale,(p.y-top)*scale);
