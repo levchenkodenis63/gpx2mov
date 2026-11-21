@@ -552,3 +552,22 @@ el('save').onclick=async()=>{
   finally{pauseClip();fitTrack=restoreFit;recording=null;el('cancel').hidden=true;lock(false);display(restore);}
 };
 prepare(trip,narrowScreen.matches,progress);
+
+// The browser releases the screen lock automatically when the app is hidden.
+if ('wakeLock' in navigator) {
+  let screenLock;
+  let requesting=false;
+  async function keepScreenOn(){
+    if(document.visibilityState!=='visible' || requesting || (screenLock && !screenLock.released)) return;
+    requesting=true;
+    try{
+      screenLock=await navigator.wakeLock.request('screen');
+    }catch(error){
+      console.debug('Удержание экрана недоступно:',error.name);
+    }finally{requesting=false;}
+  }
+  document.addEventListener('visibilitychange',keepScreenOn);
+  window.addEventListener('pageshow',keepScreenOn);
+  document.addEventListener('pointerup',keepScreenOn);
+  keepScreenOn();
+}
