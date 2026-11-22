@@ -75,12 +75,18 @@ async function loadMedia(file){
       }finally{video.onloadedmetadata=video.onerror=null;}
       return {bitmap:video,duration:video.duration,url};
     }
-    const image=new Image();image.src=url;await image.decode();
-    const ratio=Math.min(1,1920/Math.max(image.naturalWidth,image.naturalHeight));
+    let image=new Image();image.src=url;
+    try{await image.decode();}
+    catch(error){
+      if(!/\.hei[cf]$/i.test(file.name) && !/^image\/hei[cf]/i.test(file.type) && !await HeicTo.isHeic(file)) throw error;
+      image=await HeicTo({blob:file,type:'bitmap'});
+    }
+    const width=image.naturalWidth || image.width, height=image.naturalHeight || image.height;
+    const ratio=Math.min(1,1920/Math.max(width,height));
     const bitmap=document.createElement('canvas');
-    bitmap.width=Math.max(1,Math.round(image.naturalWidth*ratio));bitmap.height=Math.max(1,Math.round(image.naturalHeight*ratio));
+    bitmap.width=Math.max(1,Math.round(width*ratio));bitmap.height=Math.max(1,Math.round(height*ratio));
     bitmap.getContext('2d').drawImage(image,0,0,bitmap.width,bitmap.height);
-    URL.revokeObjectURL(url);return {bitmap};
+    image.close?.();URL.revokeObjectURL(url);return {bitmap};
   }catch(error){URL.revokeObjectURL(url);throw error;}
 }
 async function seekClip(video,time){

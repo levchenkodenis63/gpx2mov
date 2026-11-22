@@ -283,7 +283,48 @@ function endDrag(event){
   if(canvas.hasPointerCapture(event.pointerId)) canvas.releasePointerCapture(event.pointerId);
 }
 canvas.onpointerup=canvas.onpointercancel=canvas.onlostpointercapture=endDrag;
+const draftKey='atlas-route:'+location.pathname.replace(/index\.html$/,'');
+function updateRouteFiles(){
+  el('saveGpx').hidden=draft ? draft.length<2 : !trip;
+  try{el('restoreDraft').hidden=!!draft || !localStorage.getItem(draftKey);}
+  catch{el('restoreDraft').hidden=true;}
+}
+function storeDraft(){
+  try{
+    if(draft.length) localStorage.setItem(draftKey,JSON.stringify(draft.map(map.locationOf)));
+    else localStorage.removeItem(draftKey);
+    el('draftStatus').textContent=draft.length?'Черновик сохранён на этом устройстве.':'';
+  }catch{el('draftStatus').textContent='Не удалось сохранить черновик. Скачайте GPX.';}
+}
+el('restoreDraft').onclick=()=>{
+  if(busy || draft || !map) return;
+  try{
+    const saved=JSON.parse(localStorage.getItem(draftKey));
+    if(!Array.isArray(saved) || !saved.length || !saved.every(p=>Number.isFinite(p?.lat)&&Number.isFinite(p.lon))) throw Error();
+    const restored=[];
+    for(const location of saved) restored.push(map.pointFor(location,restored.at(-1)));
+    stop();draft=restored;refreshDrawing();el('recenter').click();
+  }catch{el('draftStatus').textContent='Не удалось прочитать черновик.';}
+};
+el('saveGpx').onclick=()=>{
+  const segments=draft ? [draft.map(map.locationOf)] : trip?.segments;
+  if(!segments) return;
+  const lines=['<?xml version="1.0" encoding="UTF-8"?>','<gpx version="1.1" creator="Атлас поездки" xmlns="http://www.topografix.com/GPX/1/1"><trk>'];
+  for(const segment of segments){
+    lines.push('<trkseg>');
+    for(const p of segment){
+      const time=Number.isFinite(p.time)?'<time>'+new Date(p.time).toISOString()+'</time>':'';
+      lines.push('<trkpt lat="'+p.lat.toFixed(7)+'" lon="'+p.lon.toFixed(7)+'">'+time+'</trkpt>');
+    }
+    lines.push('</trkseg>');
+  }
+  lines.push('</trk></gpx>');
+  const url=URL.createObjectURL(new Blob([lines.join('\n')],{type:'application/gpx+xml'}));
+  const link=document.createElement('a');link.href=url;link.download=(draft?'Ручной маршрут':trip.name)+'.gpx';
+  link.click();setTimeout(()=>URL.revokeObjectURL(url),60000);
+};
 function refreshDrawing(){
+  updateRouteFiles();
   centerRequest++;locationStatus.hidden=true;updateCenterButton();
   const drawing=draft!==null;
   el('drawRoute').hidden=drawing;
@@ -296,7 +337,7 @@ function refreshDrawing(){
   display(progress);
 }
 el('drawRoute').onclick=()=>{closeMobileMenu();stop();draft=[];refreshDrawing();};
-el('undoPoint').onclick=()=>{draft.pop();refreshDrawing();};
+el('undoPoint').onclick=()=>{draft.pop();storeDraft();refreshDrawing();};
 el('cancelRoute').onclick=()=>{draft=null;refreshDrawing();};
 el('finishRoute').onclick=()=>{
   closeMobileMenu();
@@ -311,7 +352,7 @@ canvas.onclick=event=>{
   const point=map.worldAt(x,y);
   const last=draft.at(-1);
   if(last && Math.hypot(last.x-point.x,last.y-point.y)<1e-8) return;
-  draft.push(point);
+  draft.push(point);storeDraft();
   refreshDrawing();
 };
 function activatePhoto(event){
@@ -418,6 +459,7 @@ async function prepare(nextTrip, vertical, initial, autoplay=false) {
     if(selectedLevel!==null) selectedLevel=Math.min(next.maxLevel,selectedLevel);
     if(previewLevel!==null) previewLevel=Math.min(next.maxLevel,previewLevel);
     map?.dispose();trip=nextTrip; map=next; portrait=vertical;
+    updateRouteFiles();
     canvas.width=w; canvas.height=h;
     el('stage').classList.toggle('portrait',vertical);
     el('wide').setAttribute('aria-pressed',String(!vertical));

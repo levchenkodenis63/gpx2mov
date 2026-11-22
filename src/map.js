@@ -534,8 +534,8 @@
         const metres=Math.hypot(place.x-target.x,place.y-target.y)*40075000*Math.cos(tags.lat*RAD)/scale;
         return metres<=1000 ? anchor : undefined;
       },
-      pointFor(location){
-        const p=project(location);
+      pointFor(location,previous){
+        const p=project(location,previous ? left+previous.x/scale : undefined);
         return new DOMPoint((p.x-left)*scale,(p.y-top)*scale);
       },
       routeView(draft,visibleHeight=frameH){
