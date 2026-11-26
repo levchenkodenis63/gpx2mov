@@ -547,6 +547,34 @@
         const fit=Math.min(frameW*.80/(x1-x0),visibleHeight*.78/(y1-y0));
         return {world:new DOMPoint((x0+x1)/2,(y0+y1)/2),level:Number.isFinite(fit)?baseLevel+Math.log2(fit):currentLevel};
       },
+      draftDistances(path){
+        let previous,km=0;
+        for(const p of path){
+          const location=this.locationOf(p);
+          if(previous) km+=kilometres(previous,location);
+          p.km=km;previous=location;
+        }
+        return km;
+      },
+      hoverDistances(x,y,r,path=points){
+        const center=this.worldAt(x,y), edge=this.worldAt(x+r,y);
+        const tolerance=Math.hypot(edge.x-center.x,edge.y-center.y);
+        const matches=[];
+        let candidate=null;
+        function flush(){if(candidate) matches.push(candidate.km);candidate=null;}
+        for(let i=1;i<path.length;i++){
+          const a=path[i-1],b=path[i];
+          if(b.start){flush();continue;}
+          const dx=b.x-a.x,dy=b.y-a.y;
+          const t=Math.max(0,Math.min(1,((center.x-a.x)*dx+(center.y-a.y)*dy)/(dx*dx+dy*dy||1)));
+          const dist=Math.hypot(center.x-a.x-t*dx,center.y-a.y-t*dy);
+          if(dist>tolerance){flush();continue;}
+          const km=a.km+t*(b.km-a.km);
+          if(candidate && Math.hypot(a.x-center.x,a.y-center.y)>tolerance) flush();
+          if(!candidate || dist<candidate.dist) candidate={km,dist};
+        }
+        flush();return matches;
+      },
       locationOf:({x,y})=>({
         lon:((left+x/scale)*360%360+360)%360-180,
         lat:Math.atan(Math.sinh(Math.PI*(1-2*Math.max(0,Math.min(1,top+y/scale)))))/RAD

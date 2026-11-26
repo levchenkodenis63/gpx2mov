@@ -291,20 +291,36 @@ function updateRouteFiles(){
 }
 function storeDraft(){
   try{
-    if(draft.length) localStorage.setItem(draftKey,JSON.stringify(draft.map(map.locationOf)));
+    const previous=JSON.parse(localStorage.getItem(draftKey) || 'null');
+    if(draft.length) localStorage.setItem(draftKey,JSON.stringify({points:draft.map(map.locationOf),media:draftMedia.filter(m=>m.id).map(({id,name,vertex})=>({id,name,vertex})),undoGroup}));
     else localStorage.removeItem(draftKey);
-    el('draftStatus').textContent=draft.length?'Черновик сохранён на этом устройстве.':'';
+    const kept=new Set(draftMedia.map(item=>item.id));
+    for(const item of previous?.media??[]){
+      if(!kept.has(item.id)) draftFileStore(store=>store.delete(item.id)).catch(()=>{});
+    }
+    el('draftStatus').textContent=draftMedia.some(m=>!m.id)?'Точки сохранены. Часть вложений доступна только в этой вкладке.':draft.length?'Черновик сохранён на этом устройстве.':'';
   }catch{el('draftStatus').textContent='Не удалось сохранить черновик. Скачайте GPX.';}
 }
-el('restoreDraft').onclick=()=>{
+el('restoreDraft').onclick=async()=>{
   if(busy || draft || !map) return;
+  lock(true);
   try{
-    const saved=JSON.parse(localStorage.getItem(draftKey));
+    const record=JSON.parse(localStorage.getItem(draftKey));
+    const saved=Array.isArray(record)?record:record.points;
     if(!Array.isArray(saved) || !saved.length || !saved.every(p=>Number.isFinite(p?.lat)&&Number.isFinite(p.lon))) throw Error();
     const restored=[];
     for(const location of saved) restored.push(map.pointFor(location,restored.at(-1)));
-    stop();draft=restored;refreshDrawing();el('recenter').click();
-  }catch{el('draftStatus').textContent='Не удалось прочитать черновик.';}
+    stop();releaseDraftMedia();draft=restored;undoGroup=record.undoGroup??null;
+    const missing=[];
+    for(const item of record.media??[]){
+      try{
+        const file=await draftFileStore(s=>s.get(item.id));
+        draftMedia.push({...item,...await loadMedia(file)});
+      }catch{missing.push(item.name);}
+    }
+    refreshDrawing();el('recenter').click();
+    el('draftStatus').textContent=missing.length?'Не восстановлены: '+missing.join(', '):'Черновик восстановлен.';
+  }catch{el('draftStatus').textContent='Не удалось прочитать черновик.';}finally{lock(false);}
 };
 el('saveGpx').onclick=()=>{
   const segments=draft ? [draft.map(map.locationOf)] : trip?.segments;
@@ -327,6 +343,14 @@ function refreshDrawing(){
   updateRouteFiles();
   centerRequest++;locationStatus.hidden=true;updateCenterButton();
   const drawing=draft!==null;
+  if(drawing){
+    const km=map.draftDistances(draft);
+    el('draftKm').textContent=kmLabel(km)+' от старта'+(draftMedia.length?' · файлов: '+draftMedia.length:'');
+  }
+  fuel();
+  el('undoPoint').textContent=undoGroup?.end===draft?.length && undoGroup ? undoGroup.label:'Убрать точку';
+  el('reverseRoute').disabled=(draft?.length??0)<2;
+  el('draftAttach').disabled=!draft?.length;
   el('drawRoute').hidden=drawing;
   el('drawTools').hidden=!drawing;
   el('photoPanel').hidden=drawing || !trip;
@@ -336,15 +360,24 @@ function refreshDrawing(){
   lock(false);
   display(progress);
 }
-el('drawRoute').onclick=()=>{closeMobileMenu();stop();draft=[];refreshDrawing();};
-el('undoPoint').onclick=()=>{draft.pop();storeDraft();refreshDrawing();};
-el('cancelRoute').onclick=()=>{draft=null;refreshDrawing();};
-el('finishRoute').onclick=()=>{
+el('drawRoute').onclick=()=>{closeMobileMenu();stop();releaseDraftMedia();draft=[];refreshDrawing();};
+
+el('cancelRoute').onclick=()=>{if(!busy){releaseDraftMedia();draft=null;refreshDrawing();}};
+el('finishRoute').onclick=async()=>{
+  if(busy) return;
   closeMobileMenu();
   const segments=[draft.map(map.locationOf)];
+  const path=draft, distance=path.at(-1).km;
   draft=null;
   refreshDrawing();
-  prepare({segments,name:'Ручной маршрут',source:'Нарисован на карте'},portrait,0);
+  const next={segments,name:'Ручной маршрут',source:'Нарисован на карте'};
+  await prepare(next,portrait,0);
+  if(trip!==next){draft=path;refreshDrawing();return;}
+  for(const item of draftMedia){
+    const i=item.vertex;
+    photos.push({...item,index:Math.max(1,i),t:i===0?0:1,at:distance?path[i].km/distance:0});
+  }
+  photos.sort((a,b)=>a.at-b.at);draftMedia=[];undoGroup=null;updatePhotoList();display(0);
 };
 canvas.onclick=event=>{
   if(!draft || busy || suppressClick || event.detail>1) return;
@@ -352,7 +385,7 @@ canvas.onclick=event=>{
   const point=map.worldAt(x,y);
   const last=draft.at(-1);
   if(last && Math.hypot(last.x-point.x,last.y-point.y)<1e-8) return;
-  draft.push(point);storeDraft();
+  draft.push(point);undoGroup=null;storeDraft();
   refreshDrawing();
 };
 function activatePhoto(event){
@@ -380,10 +413,11 @@ canvas.ondblclick=event=>{
 el('photoDialog').onclose=()=>el('photoImage').replaceChildren();
 el('appendMedia').onclick=()=>{el('photoDialog').close();el('photoFile').click();};
 el('mediaLoading').oncancel=event=>event.preventDefault();
-el('autoMedia').onchange=el('photoFile').onchange=async event=>{
+el('draftFile').onchange=el('autoMedia').onchange=el('photoFile').onchange=async event=>{
   const files=Array.from(event.target.files), auto=event.target.id==='autoMedia';
   event.target.value='';
-  if(!files.length || !trip || busy || (!auto && !photoAnchor)) return;
+  const drawing=event.target.id==='draftFile';
+  if(!files.length || busy || (drawing ? !draft?.length : !trip || (!auto && !photoAnchor))) return;
   stop();lock(true);
   const skipped=[];
   const loader=el('mediaLoading'), progressBar=el('mediaProgress');
@@ -394,14 +428,23 @@ el('autoMedia').onchange=el('photoFile').onchange=async event=>{
     for(const [index,file] of files.entries()){
       el('mediaLoadingFile').textContent='Файл '+(index+1)+' из '+files.length+' · '+file.name;
       try{
+        if(drawing){
+          const item={...await loadMedia(file),name:file.name,vertex:draft.length-1};
+          draftMedia.push(item);
+          try{
+            const id=crypto.randomUUID();await draftFileStore(s=>s.put(file,id));item.id=id;
+          }catch{ /* Keep the attachment usable for this session. */ }
+          storeDraft();continue;
+        }
         const anchor=auto ? map.mediaAnchor(await mediaTags(file)) : photoAnchor;
         if(!anchor) throw Error('Нет привязки к маршруту');
         photos.push({...anchor,...await loadMedia(file),name:file.name});
       }catch(error){skipped.push(file.name+' — '+(error?.message || 'Не удалось прочитать файл'));}
-      progressBar.value=index+1;
+      finally{progressBar.value=index+1;}
     }
     photos.sort((a,b)=>a.at-b.at);
     clearDownload();updatePhotoList();display(0);
+    if(drawing){refreshDrawing();if(skipped.length) el('draftStatus').textContent+=' Пропущены: '+skipped.join(', ');return;}
     el('photoStatus').textContent='Добавлено: '+(files.length-skipped.length)+'. '+(skipped.length?'Пропущены: '+skipped.join(', '):'');
   }finally{loader.close();lock(false);photoAnchor=null;}
 };
@@ -459,7 +502,7 @@ async function prepare(nextTrip, vertical, initial, autoplay=false) {
     if(selectedLevel!==null) selectedLevel=Math.min(next.maxLevel,selectedLevel);
     if(previewLevel!==null) previewLevel=Math.min(next.maxLevel,previewLevel);
     map?.dispose();trip=nextTrip; map=next; portrait=vertical;
-    updateRouteFiles();
+    updateRouteFiles();fuel();
     canvas.width=w; canvas.height=h;
     el('stage').classList.toggle('portrait',vertical);
     el('wide').setAttribute('aria-pressed',String(!vertical));
@@ -593,6 +636,7 @@ el('save').onclick=async()=>{
   }catch(e){el('status').textContent=e.name==='AbortError'?'Запись отменена.':e.message;}
   finally{pauseClip();fitTrack=restoreFit;recording=null;el('cancel').hidden=true;lock(false);display(restore);}
 };
+initPlanner();
 prepare(trip,narrowScreen.matches,progress);
 
 // The browser releases the screen lock automatically when the app is hidden.
