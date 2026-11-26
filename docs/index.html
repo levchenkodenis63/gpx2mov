@@ -68,7 +68,7 @@
 </style><header><div><div class="brand"><svg viewBox="0 0 24 24" fill="none" stroke="#f2f6e8" stroke-width="2"><path d="M2 17 8 6l5 9 3-6 6 10H3"/><circle cx="17" cy="5" r="1.5" fill="#ff975d" stroke="none"/></svg><span class="brand-name">Атлас поездки</span><h1 class="mobile-title">Анимация маршрута</h1></div><button id="installApp" type="button" hidden>Установить</button><div class="tag">GPX / Видео</div><button id="openMenu" type="button" aria-haspopup="dialog" aria-controls="mobileMenu">Меню</button></div></header>
 <main><div class="top"><h1>Анимация маршрута</h1></div><div class="workspace"><section><div class="card"><div class="panehead"><h2 class="heading"><span class="led"></span>Предпросмотр</h2><span class="meta" id="size">1920 × 1080</span></div><div class="stage" id="stage"><canvas id="canvas" width="1920" height="1080" aria-label="Карта маршрута"></canvas><button id="recenter" type="button" aria-label="Показать моё местоположение" title="Показать моё местоположение"><svg aria-hidden="true" viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><path d="M20.7 3.3a1 1 0 0 0-1.1-.2L3.8 10a1 1 0 0 0 .1 1.9l6.5 1.7 1.7 6.5a1 1 0 0 0 1.9.1l6.9-15.8a1 1 0 0 0-.2-1.1Z"/></svg></button><output id="hoverKm" hidden></output><div class="mapZoomTools" role="group" aria-label="Масштаб карты"><button id="zoomIn" type="button" aria-label="Приблизить карту" title="Приблизить карту">+</button><output id="levelReadout" aria-label="Уровень карты"></output><button id="zoomOut" type="button" aria-label="Отдалить карту" title="Отдалить карту">−</button></div></div><p id="locationStatus" class="status" role="status" hidden></p><div class="controls"><button id="play" disabled aria-label="Воспроизвести">▶</button><input id="seek" disabled aria-label="Позиция воспроизведения" type="range" min="0" max="1000" value="0"><small id="clock">0:00 / 0:15</small></div><div id="mobileDrawControls"></div></div>
 <div class="card info"><span class="routeicon"><svg width="25" height="25" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="5" cy="18" r="2"/><circle cx="19" cy="6" r="2"/><path d="M7 18h7a3 3 0 0 0 0-6h-4a3 3 0 0 1 0-6h7"/></svg></span><div><strong id="name">Обзорная карта</strong><small id="source">Загрузите GPX или нарисуйте маршрут на карте.</small></div><span class="km" id="distance"></span></div><details class="card fuel"><summary>Стоимость топлива</summary><label>Расход, л/100 км <input id="fuelRate" type="number" min="0" step="any" inputmode="decimal"></label><label>Цена, ₽/л <input id="fuelPrice" type="number" min="0" step="any" inputmode="decimal"></label><output id="fuelTotal"></output></details><div class="card photoPanel" id="photoPanel" hidden><h2>Фото и видео на маршруте</h2><p>Дважды нажмите на трек и выберите одно или несколько фото и видео. Нажмите дважды на метку, чтобы посмотреть файлы или добавить ещё. На телефоне также можно удержать палец на нужном месте и отпустить.</p><label class="upload">Выбрать файлы для авторазмещения<input id="autoMedia" type="file" multiple accept="image/*,video/*,.mov,.heic,.heif,image/heic,image/heif"></label><input id="photoFile" hidden type="file" multiple accept="image/*,video/*,.mov,.heic,.heif,image/heic,image/heif"><table id="mediaTable" hidden aria-label="Привязка файлов к маршруту"><thead><tr><th>Файл</th><th>Км от старта</th><th aria-label="Действия"></th></tr></thead><tbody id="photoList"></tbody></table><p id="photoStatus" class="status" role="status"></p></div></section>
-<aside class="card settings"><h2>Настройки видео</h2><div class="group" id="routeInputs"><span class="label">Трек поездки</span><label class="upload"><input id="file" type="file" accept=".gpx,application/gpx+xml,application/xml,text/xml" aria-label="Загрузить GPX"><span aria-hidden="true">＋</span> Загрузить GPX</label><button class="format" type="button" id="drawRoute">Нарисовать маршрут</button><div id="drawTools" hidden><p class="status">Ставьте точки кликом по карте. Для маршрута нужны хотя бы две точки.</p><div><output id="draftKm"></output><button id="reverseRoute">Проложить обратно</button><button id="draftAttach">Фото/видео к текущей точке</button><input id="draftFile" hidden type="file" multiple accept="image/*,video/*,.heic,.heif,.mov"><button type="button" id="finishRoute">Готово</button> <button type="button" id="undoPoint">Убрать точку</button> <button type="button" id="cancelRoute">Отмена</button></div></div><button type="button" id="saveGpx" hidden>Скачать GPX</button><button type="button" id="restoreDraft" hidden>Восстановить черновик</button><p id="draftStatus" class="status" role="status"></p><p id="importStatus" role="status" class="status"></p></div><div class="group"><span class="label">Формат кадра</span><div class="formats"><button class="format" id="wide" aria-pressed="true"><i class="rect"></i>16:9</button><button class="format" id="tall" aria-pressed="false"><i class="rect vertical"></i>9:16</button></div></div><div class="group"><label class="label" for="basemap">Тип карты</label><select id="basemap"><option value="map">Обычная карта</option><option value="satellite">Спутник · Sentinel-2</option></select><p id="imageryCredit" class="status" hidden>Мозаика 2025 года. <a href="https://maps.eox.at/" target="_blank" rel="noopener">EOX Maps</a> · <a href="https://cloudless.eox.at/documentation/license" target="_blank" rel="noopener">Условия использования</a></p></div><p id="localCredit" class="status" hidden>Карта <a href="https://maps.eox.at/" target="_blank" rel="noopener">EOX Maps</a> · <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a></p><div class="group"><label class="label" for="direction">Ориентация камеры</label><select id="direction"><option value="flyover" selected>Облёт маршрута</option><option value="course">По ходу движения</option><option value="north">Север сверху</option></select></div><div class="group"><label class="label" for="zoomMode">Режим масштаба</label><select id="zoomMode"><option value="auto">Приближение на старте и финише</option><option value="fixed">Фиксированный зум</option></select></div><div class="group camera"><div id="endZoomGroup" style="margin-top:15px"><label for="endZoom">Приближение у старта и финиша <output id="endZoomValue">3×</output></label><input id="endZoom" type="range" min="1" max="6" step="0.1" value="3"></div></div><div class="group"><label class="label" for="duration">Длительность движения</label><select id="duration"><option value="5">5 секунд</option><option value="15" selected>15 секунд</option><option value="30">30 секунд</option><option value="60">60 секунд</option></select></div><div class="group"><label class="label" for="photoDuration">Время показа каждой фотографии</label><select id="photoDuration"><option value="0.5">0,5 секунды</option><option value="1" selected>1 секунда</option><option value="1.5">1,5 секунды</option><option value="2">2 секунды</option><option value="3">3 секунды</option><option value="5">5 секунд</option></select></div><button id="save" disabled class="export">Сохранить видео</button><button hidden id="cancel" class="cancel">Отменить запись</button><p id="status" role="status" class="status"></p><a hidden id="download" class="dl">Скачать видео ещё раз</a></aside></div></main><dialog id="mediaLoading" aria-labelledby="mediaLoadingTitle" aria-describedby="mediaLoadingFile">
+<aside class="card settings"><h2>Настройки видео</h2><div class="group" id="routeInputs"><span class="label">Трек поездки</span><label class="upload"><input id="file" type="file" accept=".gpx,application/gpx+xml,application/xml,text/xml" aria-label="Загрузить GPX"><span aria-hidden="true">＋</span> Загрузить GPX</label><button class="format" type="button" id="drawRoute">Нарисовать маршрут</button><div id="drawTools" hidden><p class="status">Ставьте точки кликом по карте. Для маршрута нужны хотя бы две точки.</p><div><output id="draftKm"></output><button type="button" id="newPart" title="Начать следующую часть в последней точке">Новая часть маршрута</button><button id="reverseRoute">Проложить обратно</button><button id="draftAttach">Фото/видео к текущей точке</button><input id="draftFile" hidden type="file" multiple accept="image/*,video/*,.heic,.heif,.mov"><button type="button" id="finishRoute">Готово</button> <button type="button" id="undoPoint">Убрать точку</button> <button type="button" id="cancelRoute">Отмена</button></div></div><button type="button" id="saveGpx" hidden>Скачать GPX</button><button type="button" id="restoreDraft" hidden>Восстановить черновик</button><p id="draftStatus" class="status" role="status"></p><p id="importStatus" role="status" class="status"></p></div><div class="group"><span class="label">Формат кадра</span><div class="formats"><button class="format" id="wide" aria-pressed="true"><i class="rect"></i>16:9</button><button class="format" id="tall" aria-pressed="false"><i class="rect vertical"></i>9:16</button></div></div><div class="group"><label class="label" for="basemap">Тип карты</label><select id="basemap"><option value="map">Обычная карта</option><option value="satellite">Спутник · Sentinel-2</option></select><p id="imageryCredit" class="status" hidden>Мозаика 2025 года. <a href="https://maps.eox.at/" target="_blank" rel="noopener">EOX Maps</a> · <a href="https://cloudless.eox.at/documentation/license" target="_blank" rel="noopener">Условия использования</a></p></div><p id="localCredit" class="status" hidden>Карта <a href="https://maps.eox.at/" target="_blank" rel="noopener">EOX Maps</a> · <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a></p><div class="group"><label class="label" for="direction">Ориентация камеры</label><select id="direction"><option value="flyover" selected>Облёт маршрута</option><option value="course">По ходу движения</option><option value="north">Север сверху</option></select></div><div class="group"><label class="label" for="zoomMode">Режим масштаба</label><select id="zoomMode"><option value="auto">Приближение на старте и финише</option><option value="fixed">Фиксированный зум</option></select></div><div class="group camera"><div id="endZoomGroup" style="margin-top:15px"><label for="endZoom">Приближение у старта и финиша <output id="endZoomValue">3×</output></label><input id="endZoom" type="range" min="1" max="6" step="0.1" value="3"></div></div><div class="group"><label class="label" for="duration">Длительность движения</label><select id="duration"><option value="5">5 секунд</option><option value="15" selected>15 секунд</option><option value="30">30 секунд</option><option value="60">60 секунд</option></select></div><div class="group"><label class="label" for="photoDuration">Время показа каждой фотографии</label><select id="photoDuration"><option value="0.5">0,5 секунды</option><option value="1" selected>1 секунда</option><option value="1.5">1,5 секунды</option><option value="2">2 секунды</option><option value="3">3 секунды</option><option value="5">5 секунд</option></select></div><button id="save" disabled class="export">Сохранить видео</button><button hidden id="cancel" class="cancel">Отменить запись</button><p id="status" role="status" class="status"></p><a hidden id="download" class="dl">Скачать видео ещё раз</a></aside></div></main><dialog id="mediaLoading" aria-labelledby="mediaLoadingTitle" aria-describedby="mediaLoadingFile">
   <h2 id="mediaLoadingTitle"><span aria-hidden="true"></span>Добавление файлов</h2>
   <p id="mediaLoadingFile" role="status"></p>
   <progress id="mediaProgress" aria-label="Обработано файлов"></progress>
@@ -3219,6 +3219,11 @@ async function seekClip(video,time){
 </script><script>
 'use strict';
 let draftMedia=[], undoGroup=null;
+// Adjacent parts share their endpoint in the continuous track.
+let partStarts=[0];
+function atNewPart(){
+  return partStarts.length>1 && draft?.length===partStarts.at(-1)+1;
+}
 const kmLabel=n=>n.toLocaleString('ru-RU',{maximumFractionDigits:2})+' км';
 function fuel(){
   const km=draft ? draft.at(-1)?.km : map?.distanceKm;
@@ -3243,10 +3248,13 @@ function draftFileStore(action){
 }
 function releaseDraftMedia(){
   for(const m of draftMedia) if(m.url) URL.revokeObjectURL(m.url);
-  draftMedia=[];undoGroup=null;
+  draftMedia=[];undoGroup=null;partStarts=[0];
 }
 function undoDraft(){
   if(busy || !draft?.length) return;
+  if(atNewPart()){
+    partStarts.pop();storeDraft();refreshDrawing();return;
+  }
   const start=undoGroup?.end===draft.length ? undoGroup.start : draft.length-1;
   const removed=draftMedia.filter(m=>m.vertex>=start);
   if(removed.length && !confirm('Удалить точки и прикреплённые файлы ('+removed.length+')?')) return;
@@ -3257,10 +3265,15 @@ function undoDraft(){
 function initPlanner(){
   el('fuelRate').oninput=el('fuelPrice').oninput=fuel;
   el('undoPoint').onclick=undoDraft;
+  el('newPart').onclick=()=>{
+    if(busy || !draft || draft.length<=partStarts.at(-1)+1) return;
+    partStarts.push(draft.length-1);
+    storeDraft();refreshDrawing();
+  };
   el('reverseRoute').onclick=()=>{
-    if(busy || !draft || draft.length<2) return;
+    if(busy || !draft || draft.length<=partStarts.at(-1)+1) return;
     const start=draft.length;
-    for(let i=start-2;i>=0;i--) draft.push(new DOMPoint(draft[i].x,draft[i].y));
+    for(let i=start-2;i>=partStarts.at(-1);i--) draft.push(new DOMPoint(draft[i].x,draft[i].y));
     undoGroup={start,end:draft.length,label:'Отменить возврат'};storeDraft();refreshDrawing();
   };
   el('draftAttach').onclick=()=>{if(!busy && draft?.length) el('draftFile').click();};
@@ -3574,7 +3587,7 @@ function updateRouteFiles(){
 function storeDraft(){
   try{
     const previous=JSON.parse(localStorage.getItem(draftKey) || 'null');
-    if(draft.length) localStorage.setItem(draftKey,JSON.stringify({points:draft.map(map.locationOf),media:draftMedia.filter(m=>m.id).map(({id,name,vertex})=>({id,name,vertex})),undoGroup}));
+    if(draft.length) localStorage.setItem(draftKey,JSON.stringify({points:draft.map(map.locationOf),partStarts,media:draftMedia.filter(m=>m.id).map(({id,name,vertex})=>({id,name,vertex})),undoGroup}));
     else localStorage.removeItem(draftKey);
     const kept=new Set(draftMedia.map(item=>item.id));
     for(const item of previous?.media??[]){
@@ -3593,6 +3606,8 @@ el('restoreDraft').onclick=async()=>{
     const restored=[];
     for(const location of saved) restored.push(map.pointFor(location,restored.at(-1)));
     stop();releaseDraftMedia();draft=restored;undoGroup=record.undoGroup??null;
+    const starts=record.partStarts;
+    if(Array.isArray(starts) && starts[0]===0 && starts.every((n,i)=>Number.isInteger(n) && n<restored.length && (!i || n>starts[i-1]))) partStarts=starts;
     const missing=[];
     for(const item of record.media??[]){
       try{
@@ -3627,11 +3642,11 @@ function refreshDrawing(){
   const drawing=draft!==null;
   if(drawing){
     const km=map.draftDistances(draft);
-    el('draftKm').textContent=kmLabel(km)+' от старта'+(draftMedia.length?' · файлов: '+draftMedia.length:'');
+    el('draftKm').textContent='Часть '+partStarts.length+' · '+kmLabel(km-draft[partStarts.at(-1)]?.km || 0)+' · всего '+kmLabel(km)+(draftMedia.length?' · файлов: '+draftMedia.length:'');
   }
   fuel();
-  el('undoPoint').textContent=undoGroup?.end===draft?.length && undoGroup ? undoGroup.label:'Убрать точку';
-  el('reverseRoute').disabled=(draft?.length??0)<2;
+  el('undoPoint').textContent=atNewPart()?'Отменить новую часть':undoGroup?.end===draft?.length && undoGroup ? undoGroup.label:'Убрать точку';
+  el('newPart').disabled=el('reverseRoute').disabled=(draft?.length??0)<=partStarts.at(-1)+1;
   el('draftAttach').disabled=!draft?.length;
   el('drawRoute').hidden=drawing;
   el('drawTools').hidden=!drawing;

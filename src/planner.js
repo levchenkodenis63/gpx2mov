@@ -1,5 +1,10 @@
 'use strict';
 let draftMedia=[], undoGroup=null;
+// Adjacent parts share their endpoint in the continuous track.
+let partStarts=[0];
+function atNewPart(){
+  return partStarts.length>1 && draft?.length===partStarts.at(-1)+1;
+}
 const kmLabel=n=>n.toLocaleString('ru-RU',{maximumFractionDigits:2})+' км';
 function fuel(){
   const km=draft ? draft.at(-1)?.km : map?.distanceKm;
@@ -24,10 +29,13 @@ function draftFileStore(action){
 }
 function releaseDraftMedia(){
   for(const m of draftMedia) if(m.url) URL.revokeObjectURL(m.url);
-  draftMedia=[];undoGroup=null;
+  draftMedia=[];undoGroup=null;partStarts=[0];
 }
 function undoDraft(){
   if(busy || !draft?.length) return;
+  if(atNewPart()){
+    partStarts.pop();storeDraft();refreshDrawing();return;
+  }
   const start=undoGroup?.end===draft.length ? undoGroup.start : draft.length-1;
   const removed=draftMedia.filter(m=>m.vertex>=start);
   if(removed.length && !confirm('Удалить точки и прикреплённые файлы ('+removed.length+')?')) return;
@@ -38,10 +46,15 @@ function undoDraft(){
 function initPlanner(){
   el('fuelRate').oninput=el('fuelPrice').oninput=fuel;
   el('undoPoint').onclick=undoDraft;
+  el('newPart').onclick=()=>{
+    if(busy || !draft || draft.length<=partStarts.at(-1)+1) return;
+    partStarts.push(draft.length-1);
+    storeDraft();refreshDrawing();
+  };
   el('reverseRoute').onclick=()=>{
-    if(busy || !draft || draft.length<2) return;
+    if(busy || !draft || draft.length<=partStarts.at(-1)+1) return;
     const start=draft.length;
-    for(let i=start-2;i>=0;i--) draft.push(new DOMPoint(draft[i].x,draft[i].y));
+    for(let i=start-2;i>=partStarts.at(-1);i--) draft.push(new DOMPoint(draft[i].x,draft[i].y));
     undoGroup={start,end:draft.length,label:'Отменить возврат'};storeDraft();refreshDrawing();
   };
   el('draftAttach').onclick=()=>{if(!busy && draft?.length) el('draftFile').click();};

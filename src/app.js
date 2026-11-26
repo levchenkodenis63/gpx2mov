@@ -292,7 +292,7 @@ function updateRouteFiles(){
 function storeDraft(){
   try{
     const previous=JSON.parse(localStorage.getItem(draftKey) || 'null');
-    if(draft.length) localStorage.setItem(draftKey,JSON.stringify({points:draft.map(map.locationOf),media:draftMedia.filter(m=>m.id).map(({id,name,vertex})=>({id,name,vertex})),undoGroup}));
+    if(draft.length) localStorage.setItem(draftKey,JSON.stringify({points:draft.map(map.locationOf),partStarts,media:draftMedia.filter(m=>m.id).map(({id,name,vertex})=>({id,name,vertex})),undoGroup}));
     else localStorage.removeItem(draftKey);
     const kept=new Set(draftMedia.map(item=>item.id));
     for(const item of previous?.media??[]){
@@ -311,6 +311,8 @@ el('restoreDraft').onclick=async()=>{
     const restored=[];
     for(const location of saved) restored.push(map.pointFor(location,restored.at(-1)));
     stop();releaseDraftMedia();draft=restored;undoGroup=record.undoGroup??null;
+    const starts=record.partStarts;
+    if(Array.isArray(starts) && starts[0]===0 && starts.every((n,i)=>Number.isInteger(n) && n<restored.length && (!i || n>starts[i-1]))) partStarts=starts;
     const missing=[];
     for(const item of record.media??[]){
       try{
@@ -345,11 +347,11 @@ function refreshDrawing(){
   const drawing=draft!==null;
   if(drawing){
     const km=map.draftDistances(draft);
-    el('draftKm').textContent=kmLabel(km)+' от старта'+(draftMedia.length?' · файлов: '+draftMedia.length:'');
+    el('draftKm').textContent='Часть '+partStarts.length+' · '+kmLabel(km-draft[partStarts.at(-1)]?.km || 0)+' · всего '+kmLabel(km)+(draftMedia.length?' · файлов: '+draftMedia.length:'');
   }
   fuel();
-  el('undoPoint').textContent=undoGroup?.end===draft?.length && undoGroup ? undoGroup.label:'Убрать точку';
-  el('reverseRoute').disabled=(draft?.length??0)<2;
+  el('undoPoint').textContent=atNewPart()?'Отменить новую часть':undoGroup?.end===draft?.length && undoGroup ? undoGroup.label:'Убрать точку';
+  el('newPart').disabled=el('reverseRoute').disabled=(draft?.length??0)<=partStarts.at(-1)+1;
   el('draftAttach').disabled=!draft?.length;
   el('drawRoute').hidden=drawing;
   el('drawTools').hidden=!drawing;
